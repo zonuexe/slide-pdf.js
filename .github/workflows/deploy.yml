@@ -1,0 +1,91 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Copy CSS files
+        run: |
+          mkdir -p build/css
+          cp css/pdf-slide.css build/
+          cp css/pdf-slide.css.map build/
+
+      - name: Copy dependencies
+        run: |
+          mkdir -p build/node_modules/pdf.js-controller/css
+          mkdir -p build/node_modules/fingers.js
+          cp node_modules/pdf.js-controller/css/pdf-slide.css build/node_modules/pdf.js-controller/css/
+          cp node_modules/fingers.js/fingers.min.js build/node_modules/fingers.js/
+
+      - name: Create production HTML
+        run: |
+          cat > build/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head lang="en">
+              <meta charset="UTF-8">
+              <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1, maximum-scale=1">
+              <title>pdf.js slide</title>
+              <link rel="stylesheet" href="node_modules/pdf.js-controller/css/pdf-slide.css"/>
+              <link rel="stylesheet" href="./pdf-slide.css"/>
+              <base target="_blank"/>
+          </head>
+          <body>
+          <div id="pdf-container" class="pdf-page">
+          </div>
+          <div class="controls">
+              <div id="js-prev" class="arrow prev"></div>
+              <div id="js-next" class="arrow next"></div>
+          </div>
+          <script src="node_modules/fingers.js/fingers.min.js"></script>
+          <script src="app.js"></script>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
