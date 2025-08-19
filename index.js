@@ -75,6 +75,7 @@ function initializedEvent() {
             }
             if (pageNum !== 1) {
                 controller.renderPage(pageNum);
+                controller.pageNum = pageNum;
             }
         }
         updatePageAttribute();
