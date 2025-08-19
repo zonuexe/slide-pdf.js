@@ -40,8 +40,25 @@ container.addEventListener(PDFController.Events.after_pdf_rendering, function (e
 });
 
 function initializedEvent() {
-    document.getElementById('js-prev').addEventListener('click', controller.prevPage.bind(controller));
-    document.getElementById('js-next').addEventListener('click', controller.nextPage.bind(controller));
+    function prevPage() {
+        controller.prevPage();
+        updatePageAttribute();
+    }
+
+    function nextPage() {
+        controller.nextPage();
+        updatePageAttribute();
+    }
+
+    function updatePageAttribute() {
+        container.setAttribute('data-page', controller.pageNum);
+    }
+
+    // 初期ページ属性を設定
+    updatePageAttribute();
+
+    document.getElementById('js-prev').addEventListener('click', prevPage);
+    document.getElementById('js-next').addEventListener('click', nextPage);
 
     window.addEventListener("resize", throttle(function (event) {
         controller.fitItSize();
@@ -54,11 +71,11 @@ function initializedEvent() {
         if (kc === 37 || kc === 40 || kc === 75 || kc === 65) {
             // left, down, K, A
             event.preventDefault();
-            controller.prevPage();
+            prevPage();
         } else if (kc === 38 || kc === 39 || kc === 74 || kc === 83) {
             // up, right, J, S
             event.preventDefault();
-            controller.nextPage();
+            nextPage();
         }
 
     };
@@ -68,9 +85,9 @@ function initializedEvent() {
         var swipeGesture = fingers.addGesture(Fingers.gesture.Swipe);
         swipeGesture.addHandler(function (type, data, fingers) {
             if (data.direction === "left") {
-                controller.nextPage();
+                nextPage();
             } else if (data.direction === "right") {
-                controller.prevPage();
+                prevPage();
             }
         });
     }
