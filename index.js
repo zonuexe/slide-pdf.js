@@ -43,19 +43,44 @@ function initializedEvent() {
     function prevPage() {
         controller.prevPage();
         updatePageAttribute();
+        updateURL();
     }
 
     function nextPage() {
         controller.nextPage();
         updatePageAttribute();
+        updateURL();
     }
 
     function updatePageAttribute() {
         container.setAttribute('data-page', controller.pageNum);
     }
 
-    // 初期ページ属性を設定
-    updatePageAttribute();
+    function updateURL() {
+        var newHash = '#p=' + controller.pageNum;
+        if (window.location.hash !== newHash) {
+            window.history.replaceState(null, null, newHash);
+        }
+    }
+
+    function goToPageFromAnchor() {
+        var hash = window.location.hash;
+        if (hash && hash.startsWith('#p=')) {
+            var pageNum = parseInt(hash.substring(3));
+            if (isNaN(pageNum) || pageNum <= 0) {
+                pageNum = 1;
+            }
+            if (pageNum > controller.pageCount) {
+                pageNum = 1;
+            }
+            if (pageNum !== 1) {
+                controller.renderPage(pageNum);
+            }
+        }
+        updatePageAttribute();
+    }
+
+    goToPageFromAnchor();
 
     document.getElementById('js-prev').addEventListener('click', prevPage);
     document.getElementById('js-next').addEventListener('click', nextPage);
