@@ -9,12 +9,17 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "mkdir -p build && browserify index.js -o build/app.js",
-    "watch": "watchify -d index.js -o build/app.js",
-    "test": "mocha test"
+    "bundle": "esbuild src/main.ts --bundle --format=esm --platform=browser --target=es2020 --external:pdfjs-dist --external:pdfjs-dist/* --sourcemap --outfile=build/app.js",
+    "build": "npm run bundle && node scripts/copy-assets.js",
+    "watch": "esbuild src/main.ts --bundle --format=esm --platform=browser --target=es2020 --external:pdfjs-dist --external:pdfjs-dist/* --sourcemap --outfile=build/app.js --watch",
+    "start": "npm run build && static-server",
+    "test": "echo \"No automated tests defined\""
   },
   "directories": {
     "test": "test/"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "author": "azu",
   "license": "MIT",
@@ -24,11 +29,11 @@
   "dependencies": {
     "fingers.js": "git://github.com/paztis/fingers.js",
     "lodash.throttle": "^3.0.3",
-    "pdf.js-controller": "^1.0.1",
-    "pdfjs-dist": "^1.3.58"
+    "@zonuexe/pdf.js-controller": "^1.1.0",
+    "pdfjs-dist": "^5.4.296"
   },
   "devDependencies": {
-    "browserify": "^12.0.1",
-    "watchify": "^3.2.3"
+    "esbuild": "^0.25.11",
+    "static-server": "^2.0.2"
   }
 }

@@ -35,3 +35,32 @@ Use generator : [azu/pdf-slide-html](https://github.com/azu/pdf-slide-html "azu/
 ## License
 
 MIT
+
+## Development
+
+- `npm install`
+- `npm run build` (bundles ESM to `build/app.js` and stages worker/cmaps)
+- `npm run watch` for incremental builds during development
+- `npm run start` to build and serve via `static-server` on port 9080
+
+## Browser Usage
+
+When embedding the bundle, define an import map for `pdfjs-dist` (the ESM controller is bundled inside `build/app.js`).
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "pdfjs-dist": "./node_modules/pdfjs-dist/build/pdf.mjs",
+    "pdfjs-dist/web/pdf_viewer.mjs": "./node_modules/pdfjs-dist/web/pdf_viewer.mjs"
+  }
+}
+</script>
+<script type="module" src="./build/app.js" defer></script>
+```
+
+Within the module you can import the controller directly:
+
+```js
+import PDFController from '@zonuexe/pdf.js-controller/build/PDFJSController.js';
+```
