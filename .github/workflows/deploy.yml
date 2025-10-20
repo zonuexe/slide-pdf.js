@@ -78,6 +78,15 @@ jobs:
           </html>
           EOF
 
+      - name: Debug build directory
+        run: |
+          echo "=== Build directory structure ==="
+          find build -type f -name "*.js" -o -name "*.css" -o -name "*.html" | sort
+          echo "=== Node modules in build ==="
+          ls -la build/node_modules/ || echo "No node_modules in build"
+          echo "=== PDF.js-controller files ==="
+          ls -la build/node_modules/pdf.js-controller/css/ || echo "No pdf.js-controller files"
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
