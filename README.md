@@ -48,6 +48,8 @@ MIT
 When embedding the bundle, define an import map for `pdfjs-dist` (the ESM controller is bundled inside `build/app.js`).
 
 ```html
+<link rel="stylesheet" href="./css/vendor-pdf-slide.css" />
+<link rel="stylesheet" href="./css/pdf-slide.css" />
 <script type="importmap">
 {
   "imports": {
