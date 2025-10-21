@@ -80,7 +80,7 @@ jobs:
           <script type="importmap">
               {
                   "imports": {
-                      "@zonuexe/pdf.js-controller": "node_modules/@zonuexe/pdf.js-controller/build/PDFJSController.js",
+                      "@zonuexe/pdf.js-controller": "./node_modules/@zonuexe/pdf.js-controller/build/PDFJSController.js",
                       "pdfjs-dist": "./node_modules/pdfjs-dist/build/pdf.mjs",
                       "pdfjs-dist/web/pdf_viewer.mjs": "./node_modules/pdfjs-dist/web/pdf_viewer.mjs"
                   }

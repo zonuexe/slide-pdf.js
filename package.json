@@ -27,9 +27,9 @@
     "url": "https://github.com/azu/slide-pdf.js/issues"
   },
   "dependencies": {
+    "@zonuexe/pdf.js-controller": "^1.1.2",
     "fingers.js": "git://github.com/paztis/fingers.js",
     "lodash.throttle": "^3.0.3",
-    "@zonuexe/pdf.js-controller": "^1.1.0",
     "pdfjs-dist": "^5.4.296"
   },
   "devDependencies": {
