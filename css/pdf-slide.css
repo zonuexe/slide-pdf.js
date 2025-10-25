@@ -42,3 +42,11 @@ body {
     border-inline-start-color: #13DAEC;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .controls {
+    & .arrow {
+      transition: none;
+    }
+  }
+}

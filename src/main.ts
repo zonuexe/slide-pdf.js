@@ -14,6 +14,17 @@ if (!(container instanceof HTMLElement)) {
   throw new Error('Element with id "pdf-container" was not found');
 }
 
+const eventRegistry = new AbortController();
+const { signal: eventSignal } = eventRegistry;
+
+window.addEventListener(
+  'pagehide',
+  () => {
+    eventRegistry.abort();
+  },
+  { once: true }
+);
+
 const controller = new PDFController({
   container,
   workerSrc: new URL('./pdf.worker.mjs', import.meta.url).toString(),
@@ -47,12 +58,12 @@ function attachColourSync() {
   container.addEventListener(beforeEvent, () => {
     updateColours();
     controller.domMapObject.canvas.style.visibility = 'hidden';
-  });
+  }, { signal: eventSignal });
 
   container.addEventListener(afterEvent, () => {
     updateColours();
     controller.domMapObject.canvas.style.visibility = 'visible';
-  });
+  }, { signal: eventSignal });
 }
 
 function updateColours() {
@@ -95,42 +106,50 @@ function wireNavigationControls() {
   const prevButton = document.getElementById('js-prev');
   const nextButton = document.getElementById('js-next');
 
-  prevButton?.addEventListener('click', () => void prevPage());
-  nextButton?.addEventListener('click', () => void nextPage());
+  prevButton?.addEventListener('click', () => void prevPage(), { signal: eventSignal });
+  nextButton?.addEventListener('click', () => void nextPage(), { signal: eventSignal });
 
-  window.addEventListener('hashchange', () => {
-    void goToPageFromAnchor();
-  });
+  window.addEventListener(
+    'hashchange',
+    () => {
+      void goToPageFromAnchor();
+    },
+    { signal: eventSignal }
+  );
 }
 
 function wireKeyboardShortcuts() {
-  document.addEventListener('keydown', (event) => {
-    if (event.shiftKey || event.ctrlKey || event.metaKey) {
-      return;
-    }
-    switch (event.key) {
-      case 'ArrowLeft':
-      case 'ArrowDown':
-      case 'k':
-      case 'a':
-      case 'K':
-      case 'A':
-        event.preventDefault();
-        void prevPage();
-        break;
-      case 'ArrowRight':
-      case 'ArrowUp':
-      case 'j':
-      case 's':
-      case 'J':
-      case 'S':
-        event.preventDefault();
-        void nextPage();
-        break;
-      default:
-        break;
-    }
-  });
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      switch (event.key) {
+        case 'ArrowLeft':
+        case 'ArrowDown':
+        case 'k':
+        case 'a':
+        case 'K':
+        case 'A':
+          event.preventDefault();
+          void prevPage();
+          break;
+        case 'ArrowRight':
+        case 'ArrowUp':
+        case 'j':
+        case 's':
+        case 'J':
+        case 'S':
+          event.preventDefault();
+          void nextPage();
+          break;
+        default:
+          break;
+      }
+    },
+    { signal: eventSignal }
+  );
 }
 
 function wireResizeHandler() {
@@ -138,7 +157,8 @@ function wireResizeHandler() {
     'resize',
     throttle(() => {
       void controller.fitItSize();
-    }, 100)
+    }, 100),
+    { signal: eventSignal }
   );
 }
 
@@ -155,6 +175,9 @@ function wireSwipeGestures() {
     } else if (data.direction === 'right') {
       void prevPage();
     }
+  });
+  eventSignal.addEventListener('abort', () => {
+    fingers.destroy?.();
   });
 }
 
