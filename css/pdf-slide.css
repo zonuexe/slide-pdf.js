@@ -21,31 +21,24 @@ body {
   display: flex;
   gap: 1em;
   user-select: none;
+  & .arrow {
+    width: 0;
+    height: 0;
+    border-block: 2em solid transparent;
+    border-inline: 0 solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s ease-in-out;
+  }
+  & .prev {
+    border-inline-end: 50px solid #71E9F4;
+  }
+  & .next {
+    border-inline-start: 50px solid #71E9F4;
+  }
+  & .prev:hover {
+    border-inline-end-color: #13DAEC;
+  }
+  & .next:hover {
+    border-inline-start-color: #13DAEC;
+  }
 }
-
-.controls .arrow {
-  width: 0;
-  height: 0;
-  border-block: 2em solid transparent;
-  border-inline: 0 solid transparent;
-  cursor: pointer;
-  transition: border-color 0.2s ease-in-out;
-}
-
-.controls .prev {
-  border-inline-end: 50px solid #71E9F4;
-}
-
-.controls .next {
-  border-inline-start: 50px solid #71E9F4;
-}
-
-.controls .prev:hover {
-  border-inline-end-color: #13DAEC;
-}
-
-.controls .next:hover {
-  border-inline-start-color: #13DAEC;
-}
-
-/*# sourceMappingURL=pdf-slide.css.map */
