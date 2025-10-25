@@ -1,66 +1,49 @@
-%margin-zero {
-  padding: 0;
+html,
+body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   margin: 0;
+  padding: 0;
+  font-family: arial, verdana, sans-serif;
+}
+
+#pdf-container {
+  position: relative;
   width: 100%;
   height: 100%;
 }
 
-%absolute-zero {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-
-}
-
-html, body {
-  box-sizing: border-box;
-  font-family: arial, verdana, sans-serif;
-  @extend %margin-zero;
-}
-
-// controller
 .controls {
   position: absolute;
   bottom: 1em;
   right: 1em;
+  display: flex;
+  gap: 1em;
+  user-select: none;
 
   .arrow {
     width: 0;
     height: 0;
-    border: 2em solid #71E9F4;
-    float: left;
-    margin-right: 1em;
-
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
+    border-block: 2em solid transparent;
+    border-inline: 0 solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s ease-in-out;
   }
 
   .prev {
-    border-top-color: transparent;
-    border-right-width: 50px;
-    border-bottom-color: transparent;
-    border-left: 0 transparent;
+    border-inline-end: 50px solid #71E9F4;
   }
 
   .next {
-    border-top-color: transparent;
-    border-right: 0 transparent;
-    border-bottom-color: transparent;
-    border-left-width: 50px;
+    border-inline-start: 50px solid #71E9F4;
   }
 
   .prev:hover {
-    border-right-color: #13DAEC;
-    cursor: pointer;
+    border-inline-end-color: #13DAEC;
   }
 
   .next:hover {
-    border-left-color: #13DAEC;
-    cursor: pointer;
+    border-inline-start-color: #13DAEC;
   }
 }

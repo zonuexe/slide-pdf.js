@@ -1,7 +1,12 @@
 {
-"version": 3,
-"mappings": "AAAA,UAAa;EACX,OAAO,EAAE,CAAC;EACV,MAAM,EAAE,CAAC;EACT,KAAK,EAAE,IAAI;EACX,MAAM,EAAE,IAAI;;AAYd,UAAW;EACT,UAAU,EAAE,UAAU;EACtB,WAAW,EAAE,0BAA0B;;AAKzC,SAAU;EACR,QAAQ,EAAE,QAAQ;EAClB,MAAM,EAAE,GAAG;EACX,KAAK,EAAE,GAAG;EAEV,gBAAO;IACL,KAAK,EAAE,CAAC;IACR,MAAM,EAAE,CAAC;IACT,MAAM,EAAE,iBAAiB;IACzB,KAAK,EAAE,IAAI;IACX,YAAY,EAAE,GAAG;IAEjB,qBAAqB,EAAE,IAAI;IAC3B,mBAAmB,EAAE,IAAI;IACzB,gBAAgB,EAAE,IAAI;IACtB,eAAe,EAAE,IAAI;IACrB,WAAW,EAAE,IAAI;EAGnB,eAAM;IACJ,gBAAgB,EAAE,WAAW;IAC7B,kBAAkB,EAAE,IAAI;IACxB,mBAAmB,EAAE,WAAW;IAChC,WAAW,EAAE,aAAa;EAG5B,eAAM;IACJ,gBAAgB,EAAE,WAAW;IAC7B,YAAY,EAAE,aAAa;IAC3B,mBAAmB,EAAE,WAAW;IAChC,iBAAiB,EAAE,IAAI;EAGzB,qBAAY;IACV,kBAAkB,EAAE,OAAO;IAC3B,MAAM,EAAE,OAAO;EAGjB,qBAAY;IACV,iBAAiB,EAAE,OAAO;IAC1B,MAAM,EAAE,OAAO",
-"sources": ["pdf-slide.scss"],
-"names": [],
-"file": "pdf-slide.css"
+  "version": 3,
+  "file": "pdf-slide.css",
+  "sources": [
+    "pdf-slide.scss"
+  ],
+  "sourcesContent": [
+    "html,\nbody {\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  padding: 0;\n  font-family: arial, verdana, sans-serif;\n}\n\n#pdf-container {\n  position: relative;\n  width: 100%;\n  height: 100%;\n}\n\n.controls {\n  position: absolute;\n  bottom: 1em;\n  right: 1em;\n  display: flex;\n  gap: 1em;\n  user-select: none;\n\n  .arrow {\n    width: 0;\n    height: 0;\n    border-block: 2em solid transparent;\n    border-inline: 0 solid transparent;\n    cursor: pointer;\n    transition: border-color 0.2s ease-in-out;\n  }\n\n  .prev {\n    border-inline-end: 50px solid #71E9F4;\n  }\n\n  .next {\n    border-inline-start: 50px solid #71E9F4;\n  }\n\n  .prev:hover {\n    border-inline-end-color: #13DAEC;\n  }\n\n  .next:hover {\n    border-inline-start-color: #13DAEC;\n  }\n}\n"
+  ],
+  "names": [],
+  "mappings": ""
 }
