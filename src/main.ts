@@ -163,22 +163,76 @@ function wireResizeHandler() {
 }
 
 function wireSwipeGestures() {
-  const FingersGlobal: any = (window as unknown as { Fingers?: any }).Fingers;
-  if (!FingersGlobal?.Instance?.IS_MOBILE) {
+  if (!('PointerEvent' in window)) {
     return;
   }
-  const fingers = new FingersGlobal(document.body);
-  const swipeGesture = fingers.addGesture(FingersGlobal.gesture.Swipe);
-  swipeGesture.addHandler((_type: unknown, data: { direction: string }) => {
-    if (data.direction === 'left') {
-      void nextPage();
-    } else if (data.direction === 'right') {
-      void prevPage();
+
+  container.style.touchAction = 'pan-y';
+
+  let activePointerId: number | null = null;
+  let startX = 0;
+  let startY = 0;
+  const swipeThreshold = 45;
+
+  const reset = () => {
+    activePointerId = null;
+  };
+
+  container.addEventListener(
+    'pointerdown',
+    (event: PointerEvent) => {
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
+        return;
+      }
+      if (activePointerId !== null) {
+        return;
+      }
+      activePointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      if (typeof container.setPointerCapture === 'function') {
+        container.setPointerCapture(event.pointerId);
+      }
+    },
+    { signal: eventSignal }
+  );
+
+  container.addEventListener(
+    'pointerup',
+    (event: PointerEvent) => {
+      if (event.pointerId !== activePointerId) {
+        return;
+      }
+      if (typeof container.hasPointerCapture === 'function' && container.hasPointerCapture(event.pointerId)) {
+        container.releasePointerCapture(event.pointerId);
+      }
+      const deltaX = event.clientX - startX;
+      const deltaY = event.clientY - startY;
+      reset();
+      if (Math.abs(deltaX) < swipeThreshold || Math.abs(deltaX) <= Math.abs(deltaY)) {
+        return;
+      }
+      if (deltaX < 0) {
+        void nextPage();
+      } else {
+        void prevPage();
+      }
+    },
+    { signal: eventSignal }
+  );
+
+  const cancelHandler = (event: PointerEvent) => {
+    if (event.pointerId !== activePointerId) {
+      return;
     }
-  });
-  eventSignal.addEventListener('abort', () => {
-    fingers.destroy?.();
-  });
+    if (typeof container.hasPointerCapture === 'function' && container.hasPointerCapture(event.pointerId)) {
+      container.releasePointerCapture(event.pointerId);
+    }
+    reset();
+  };
+
+  container.addEventListener('pointercancel', cancelHandler, { signal: eventSignal });
+  container.addEventListener('lostpointercapture', cancelHandler, { signal: eventSignal });
 }
 
 async function prevPage() {
