@@ -51,7 +51,6 @@ jobs:
         run: |
           mkdir -p build/node_modules
           cp -r node_modules/pdfjs-dist build/node_modules/
-          cp -r node_modules/fingers.js build/node_modules/
           mkdir -p build/node_modules/@zonuexe
           cp -r node_modules/@zonuexe/pdf.js-controller build/node_modules/@zonuexe/
 
@@ -76,7 +75,6 @@ jobs:
               <div id="js-prev" class="arrow prev"></div>
               <div id="js-next" class="arrow next"></div>
           </div>
-          <script src="node_modules/fingers.js/fingers.min.js"></script>
           <script type="importmap">
               {
                   "imports": {
