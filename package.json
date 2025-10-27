@@ -9,9 +9,9 @@
   },
   "main": "index.js",
   "scripts": {
-    "bundle": "esbuild src/main.ts --bundle --format=esm --platform=browser --target=es2020 --external:pdfjs-dist --external:pdfjs-dist/* --sourcemap --outfile=build/app.js",
+    "bundle": "esbuild src/main.ts --bundle --format=esm --platform=browser --target=es2020 --external:pdfjs-dist --external:pdfjs-dist/* --sourcemap --outfile=app.js",
     "build": "npm run bundle && node scripts/copy-assets.js",
-    "watch": "esbuild src/main.ts --bundle --format=esm --platform=browser --target=es2020 --external:pdfjs-dist --external:pdfjs-dist/* --sourcemap --outfile=build/app.js --watch",
+    "watch": "esbuild src/main.ts --bundle --format=esm --platform=browser --target=es2020 --external:pdfjs-dist --external:pdfjs-dist/* --sourcemap --outfile=app.js --watch",
     "start": "npm run build && static-server",
     "test": "echo \"No automated tests defined\""
   },

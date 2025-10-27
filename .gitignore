@@ -22,6 +22,10 @@ coverage
 build/
 build/Release
 vendor/
+app.js
+app.js.map
+css/vendor-pdf-slide.css
+css/vendor-pdf-slide.css.map
 
 # Dependency directory
 # Commenting this out is preferred by some people, see

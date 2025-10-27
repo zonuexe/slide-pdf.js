@@ -46,6 +46,8 @@ jobs:
           mkdir -p build/css
           cp css/pdf-slide.css build/css/
           cp css/pdf-slide.css.map build/css/ || true
+          cp css/vendor-pdf-slide.css build/css/
+          cp css/vendor-pdf-slide.css.map build/css/ || true
 
       - name: Copy runtime modules
         run: |
@@ -54,40 +56,8 @@ jobs:
           mkdir -p build/node_modules/@zonuexe
           cp -r node_modules/@zonuexe/pdf.js-controller build/node_modules/@zonuexe/
 
-      - name: Create production HTML
-        run: |
-          cat > build/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head lang="en">
-              <meta charset="UTF-8">
-              <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1, maximum-scale=1">
-              <title>pdf.js slide</title>
-              <link rel="stylesheet" href="./node_modules/pdfjs-dist/web/pdf_viewer.css"/>
-              <link rel="stylesheet" href="css/vendor-pdf-slide.css"/>
-              <link rel="stylesheet" href="css/pdf-slide.css"/>
-              <base target="_blank"/>
-          </head>
-          <body>
-          <div id="pdf-container" class="pdf-page">
-          </div>
-          <div class="controls">
-              <div id="js-prev" class="arrow prev"></div>
-              <div id="js-next" class="arrow next"></div>
-          </div>
-          <script type="importmap">
-              {
-                  "imports": {
-                      "@zonuexe/pdf.js-controller": "./node_modules/@zonuexe/pdf.js-controller/build/PDFJSController.js",
-                      "pdfjs-dist": "./node_modules/pdfjs-dist/build/pdf.mjs",
-                      "pdfjs-dist/web/pdf_viewer.mjs": "./node_modules/pdfjs-dist/web/pdf_viewer.mjs"
-                  }
-              }
-          </script>
-          <script type="module" src="app.js" defer></script>
-          </body>
-          </html>
-          EOF
+      - name: Prepare index.html
+        run: cp index.html build/index.html
 
       - name: Debug build directory
         run: |
