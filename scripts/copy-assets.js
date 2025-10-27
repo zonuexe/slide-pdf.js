@@ -19,18 +19,27 @@ function copyIfExists(source, target) {
   }
 }
 
+function copyDir(source, target) {
+  if (fs.existsSync(target)) {
+    fs.rmSync(target, { recursive: true, force: true });
+  }
+  fs.cpSync(source, target, { recursive: true });
+}
+
 const workerSource = require.resolve('pdfjs-dist/build/pdf.worker.mjs');
 const workerTarget = path.join(buildDir, 'pdf.worker.mjs');
 copyFile(workerSource, workerTarget);
 copyIfExists(`${workerSource}.map`, `${workerTarget}.map`);
+const workerTargetRoot = path.join(projectRoot, 'pdf.worker.mjs');
+copyFile(workerSource, workerTargetRoot);
+copyIfExists(`${workerSource}.map`, `${workerTargetRoot}.map`);
 
 const pdfjsPackageDir = path.dirname(require.resolve('pdfjs-dist/package.json'));
 const cmapsSource = path.join(pdfjsPackageDir, 'cmaps');
 const cmapsTarget = path.join(buildDir, 'cmaps');
-if (fs.existsSync(cmapsTarget)) {
-  fs.rmSync(cmapsTarget, { recursive: true, force: true });
-}
-fs.cpSync(cmapsSource, cmapsTarget, { recursive: true });
+copyDir(cmapsSource, cmapsTarget);
+const cmapsRootTarget = path.join(projectRoot, 'cmaps');
+copyDir(cmapsSource, cmapsRootTarget);
 
 const controllerPackageDir = path.dirname(require.resolve('@zonuexe/pdf.js-controller/package.json'));
 const controllerCssSource = path.join(controllerPackageDir, 'css', 'pdf-slide.css');

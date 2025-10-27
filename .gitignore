@@ -26,6 +26,9 @@ app.js
 app.js.map
 css/vendor-pdf-slide.css
 css/vendor-pdf-slide.css.map
+pdf.worker.mjs
+pdf.worker.mjs.map
+cmaps/
 
 # Dependency directory
 # Commenting this out is preferred by some people, see
