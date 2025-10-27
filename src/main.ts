@@ -46,6 +46,7 @@ async function initializeNavigation() {
   attachColourSync();
   await goToPageFromAnchor();
   wireNavigationControls();
+  wireClickNavigationZones();
   wireKeyboardShortcuts();
   wireResizeHandler();
   wireSwipeGestures();
@@ -118,6 +119,31 @@ function wireNavigationControls() {
   );
 }
 
+function wireClickNavigationZones() {
+  const zoneThreshold = 0.15;
+  container.addEventListener(
+    'click',
+    (event) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0) {
+        return;
+      }
+      const xRatio = (event.clientX - rect.left) / rect.width;
+      if (xRatio <= zoneThreshold) {
+        event.preventDefault();
+        void prevPage();
+      } else if (xRatio >= 1 - zoneThreshold) {
+        event.preventDefault();
+        void nextPage();
+      }
+    },
+    { signal: eventSignal }
+  );
+}
+
 function wireKeyboardShortcuts() {
   document.addEventListener(
     'keydown',
@@ -168,6 +194,9 @@ function wireSwipeGestures() {
   }
 
   container.style.touchAction = 'pan-y';
+  if (controller.domMapObject?.canvas instanceof HTMLCanvasElement) {
+    controller.domMapObject.canvas.style.touchAction = 'pan-y';
+  }
 
   let activePointerId: number | null = null;
   let startX = 0;
