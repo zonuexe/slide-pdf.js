@@ -1,5 +1,5 @@
 import PDFController from '@zonuexe/pdf.js-controller/build/PDFJSController.js';
-import throttle from 'lodash.throttle';
+import { throttle } from 'es-toolkit';
 
 const params = new URLSearchParams(window.location.search);
 const pdfUrlParam = params.get('slide');
