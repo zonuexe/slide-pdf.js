@@ -14,6 +14,8 @@ if (!(container instanceof HTMLElement)) {
   throw new Error('Element with id "pdf-container" was not found');
 }
 
+let controlsElement: HTMLElement | null = null;
+
 const eventRegistry = new AbortController();
 const { signal: eventSignal } = eventRegistry;
 
@@ -50,6 +52,7 @@ async function initializeNavigation() {
   wireKeyboardShortcuts();
   wireResizeHandler();
   wireSwipeGestures();
+  setupControlsVisibility();
 }
 
 function attachColourSync() {
@@ -107,8 +110,22 @@ function wireNavigationControls() {
   const prevButton = document.getElementById('js-prev');
   const nextButton = document.getElementById('js-next');
 
-  prevButton?.addEventListener('click', () => void prevPage(), { signal: eventSignal });
-  nextButton?.addEventListener('click', () => void nextPage(), { signal: eventSignal });
+  prevButton?.addEventListener(
+    'click',
+    () => {
+      showControls();
+      void prevPage(false);
+    },
+    { signal: eventSignal }
+  );
+  nextButton?.addEventListener(
+    'click',
+    () => {
+      showControls();
+      void nextPage(false);
+    },
+    { signal: eventSignal }
+  );
 
   window.addEventListener(
     'hashchange',
@@ -264,14 +281,55 @@ function wireSwipeGestures() {
   container.addEventListener('lostpointercapture', cancelHandler, { signal: eventSignal });
 }
 
-async function prevPage() {
-  await controller.prevPage();
-  postNavigationUpdate();
+function setupControlsVisibility() {
+  const candidate = document.querySelector('.controls');
+  if (!(candidate instanceof HTMLElement)) {
+    return;
+  }
+  controlsElement = candidate;
+  controlsElement.addEventListener(
+    'click',
+    () => {
+      showControls();
+    },
+    { signal: eventSignal }
+  );
 }
 
-async function nextPage() {
+function fadeControls() {
+  setControlsOpacity('0.2');
+}
+
+function showControls() {
+  setControlsOpacity('1');
+}
+
+function setControlsOpacity(value: string) {
+  if (!controlsElement) {
+    const candidate = document.querySelector('.controls');
+    if (candidate instanceof HTMLElement) {
+      controlsElement = candidate;
+    } else {
+      return;
+    }
+  }
+  controlsElement.style.opacity = value;
+}
+
+async function prevPage(shouldFade = true) {
+  await controller.prevPage();
+  postNavigationUpdate();
+  if (shouldFade) {
+    fadeControls();
+  }
+}
+
+async function nextPage(shouldFade = true) {
   await controller.nextPage();
   postNavigationUpdate();
+  if (shouldFade) {
+    fadeControls();
+  }
 }
 
 function postNavigationUpdate() {
