@@ -54,7 +54,9 @@ copyIfExists(`${controllerCssSource}.map`, `${controllerCssRootTarget}.map`);
 const localCssSource = path.join(projectRoot, 'css', 'pdf-slide.css');
 const localCssTarget = path.join(cssDir, 'pdf-slide.css');
 copyFile(localCssSource, localCssTarget);
-copyIfExists(`${localCssSource}.map`, `${localCssTarget}.map`);
+// 空のsource mapファイルを作成して404エラーを防ぐ
+const emptySourceMap = JSON.stringify({ version: 3, sources: [], names: [], mappings: '' });
+fs.writeFileSync(path.join(cssDir, 'pdf-slide.css.map'), emptySourceMap);
 
 const bundleSource = path.join(projectRoot, 'app.js');
 const bundleTarget = path.join(buildDir, 'app.js');
