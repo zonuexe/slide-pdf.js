@@ -56,8 +56,10 @@ jobs:
           mkdir -p build/node_modules/@zonuexe
           cp -r node_modules/@zonuexe/pdf.js-controller build/node_modules/@zonuexe/
 
-      - name: Prepare index.html
-        run: cp index.html build/index.html
+      - name: Prepare HTML files
+        run: |
+          cp index.html build/index.html
+          cp speaker.html build/speaker.html
 
       - name: Debug build directory
         run: |
