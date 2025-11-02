@@ -81,6 +81,8 @@ async function initializeNavigation() {
   wireResizeHandler();
   wireSwipeGestures();
   setupControlsVisibility();
+  // 初期表示時は常にSpeakerボタンを表示
+  showSpeakerButton();
 }
 
 function attachColourSync() {
@@ -649,12 +651,35 @@ async function nextPage(shouldFade = true) {
 function postNavigationUpdate() {
   updatePageAttribute();
   updateURL();
+  updateSpeakerButtonVisibility();
   scheduleSpeakerViewUpdate();
   sendSpeakerPing('navigation-update');
 }
 
 function updatePageAttribute() {
   container.setAttribute('data-page', String(controller.pageNum ?? ''));
+}
+
+function showSpeakerButton() {
+  const button = document.getElementById('js-speaker');
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  button.style.display = '';
+}
+
+function updateSpeakerButtonVisibility() {
+  const button = document.getElementById('js-speaker');
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  const currentPage = controller.pageNum ?? 1;
+  // ページ移動時は、先頭ページ（1ページ目）以外では非表示
+  if (currentPage === 1) {
+    button.style.display = '';
+  } else {
+    button.style.display = 'none';
+  }
 }
 
 function updateURL() {
