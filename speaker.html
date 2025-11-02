@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <base href="./">
+  <title>Speaker View</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #0f0f0f;
+      color: #f5f5f5;
+    }
+    body {
+      display: flex;
+    }
+    .speaker-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      padding: 1.5rem;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+    }
+    .preview-row {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      min-height: 0;
+    }
+    .preview-tile {
+      background: #161616;
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-height: 0;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+    .preview-title {
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      color: #b5b5b5;
+    }
+    .preview-frame {
+      flex: 1;
+      background: #050505;
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      min-height: 0;
+      position: relative;
+    }
+    .preview-canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      background: #000;
+    }
+    .speaker-clock {
+      font-size: 3rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      margin-top: auto;
+    }
+    .speaker-channel-indicator {
+      font-size: 0.8rem;
+      text-align: center;
+      color: #7dd3fc;
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body class="speaker-view">
+  <div class="speaker-layout" id="js-speaker-root">
+    <div class="preview-row">
+      <div class="preview-tile">
+        <div class="preview-title" id="js-speaker-current-label">現在: -</div>
+        <div class="preview-frame">
+          <canvas class="preview-canvas" id="js-speaker-current-canvas"></canvas>
+        </div>
+      </div>
+      <div class="preview-tile">
+        <div class="preview-title" id="js-speaker-next-label">次: -</div>
+        <div class="preview-frame">
+          <canvas class="preview-canvas" id="js-speaker-next-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="speaker-clock" id="js-speaker-clock">--:--:--</div>
+    <div class="speaker-channel-indicator" id="js-speaker-channel">channel: connecting…</div>
+  </div>
+  <noscript>Enable JavaScript to use the speaker view.</noscript>
+  <script type="module">
+    import * as pdfjsLib from './node_modules/pdfjs-dist/build/pdf.mjs';
+
+    const params = new URLSearchParams(window.location.search);
+    const handshake = params.get('handshake') || undefined;
+    const pdfUrl = params.get('slide');
+    const channelIndicator = document.getElementById('js-speaker-channel');
+    const currentLabel = document.getElementById('js-speaker-current-label');
+    const nextLabel = document.getElementById('js-speaker-next-label');
+    const currentCanvas = document.getElementById('js-speaker-current-canvas');
+    const nextCanvas = document.getElementById('js-speaker-next-canvas');
+    const clockElement = document.getElementById('js-speaker-clock');
+
+    let pdfDoc = null;
+    let currentPage = 1;
+    let nextPage = null;
+    let totalPages = 0;
+    let renderTasks = { current: null, next: null };
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.mjs', import.meta.url).toString();
+
+    const updateChannel = (text) => {
+      if (channelIndicator) {
+        channelIndicator.textContent = text;
+      }
+    };
+
+    // 時計の更新
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    const updateClock = () => {
+      if (clockElement) {
+        clockElement.textContent = formatter.format(new Date());
+      }
+    };
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // キーボードイベントをホストに転送
+    const handleKeydown = (event) => {
+      if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      const navKeys = ['ArrowLeft', 'ArrowDown', 'k', 'a', 'K', 'A', 'PageUp',
+                      'ArrowRight', 'ArrowUp', 'j', 's', 'J', 'S', 'PageDown'];
+      if (navKeys.includes(event.key) && window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({
+            type: 'speaker-keydown',
+            handshake,
+            key: event.key
+          }, window.location.origin);
+        } catch (error) {
+          console.error('Failed to send keydown event', error);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', handleKeydown);
+
+    // PDF読み込み
+    async function loadPDF(url) {
+      try {
+        updateChannel('channel: loading PDF…');
+        const loadingTask = pdfjsLib.getDocument({
+          url: url,
+          cMapUrl: new URL('./cmaps/', import.meta.url).toString(),
+          cMapPacked: true
+        });
+        pdfDoc = await loadingTask.promise;
+        totalPages = pdfDoc.numPages;
+        updateChannel('channel: PDF loaded');
+        return true;
+      } catch (error) {
+        console.error('Failed to load PDF', error);
+        updateChannel('channel: error - PDF load failed');
+        return false;
+      }
+    }
+
+    // ページのレンダリング
+    async function renderPreview(role, pageNumber, canvas, label) {
+      if (!canvas || !label) return;
+
+      const cancelTask = (task) => {
+        if (task) {
+          try {
+            task.cancel();
+          } catch {
+            /* no-op */
+          }
+        }
+      };
+
+      cancelTask(renderTasks[role]);
+      renderTasks[role] = null;
+
+      if (!pdfDoc || !pageNumber) {
+        label.textContent = role === 'current' ? '現在: -' : '次: (終端)';
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          drawFallback(role, ctx, canvas);
+        }
+        return;
+      }
+
+      try {
+        const page = await pdfDoc.getPage(pageNumber);
+        const bounds = canvas.parentElement;
+        const maxWidth = bounds?.clientWidth ?? Math.max(window.innerWidth / 2, 200);
+        const maxHeight = bounds?.clientHeight ?? Math.max(window.innerHeight * 0.6, 200);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const widthScale = maxWidth / baseViewport.width;
+        const heightScale = maxHeight / baseViewport.height;
+        const scale = Math.max(Math.min(widthScale, heightScale), 0.1);
+        const viewport = page.getViewport({ scale });
+        const outputScale = window.devicePixelRatio ?? 1;
+
+        canvas.width = Math.max(Math.floor(viewport.width * outputScale), 1);
+        canvas.height = Math.max(Math.floor(viewport.height * outputScale), 1);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+
+        const context = canvas.getContext('2d');
+        if (!context) return;
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        const renderContext = {
+          canvasContext: context,
+          viewport
+        };
+        if (outputScale !== 1) {
+          renderContext.transform = [outputScale, 0, 0, outputScale, 0, 0];
+        }
+
+        label.textContent = role === 'current'
+          ? `現在: ${pageNumber}/${totalPages}`
+          : `次: ${pageNumber}/${totalPages}`;
+
+        const renderTask = page.render(renderContext);
+        renderTasks[role] = renderTask;
+        try {
+          await renderTask.promise;
+        } catch (error) {
+          if (error?.name !== 'RenderingCancelledException') {
+            throw error;
+          }
+        } finally {
+          if (renderTasks[role] === renderTask) {
+            renderTasks[role] = null;
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to render ${role} preview`, error);
+        label.textContent = role === 'current' ? '現在: エラー' : '次: エラー';
+      }
+    }
+
+    function drawFallback(role, context, canvas) {
+      const width = canvas.parentElement?.clientWidth ?? Math.max(window.innerWidth / 2, 200);
+      const height = canvas.parentElement?.clientHeight ?? Math.max(window.innerHeight * 0.6, 200);
+      const ratio = window.devicePixelRatio ?? 1;
+      canvas.width = Math.max(Math.floor(width * ratio), 1);
+      canvas.height = Math.max(Math.floor(height * ratio), 1);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+
+      context.fillStyle = '#3a3a3a';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = '#8a8a8a';
+      context.font = `${Math.round(canvas.height / 8)}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const message = role === 'current' ? 'ページ情報なし' : '次のページなし';
+      context.fillText(message, canvas.width / 2, canvas.height / 2);
+    }
+
+    // リサイズ時の更新
+    let resizeTimeout = null;
+    window.addEventListener('resize', () => {
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+      resizeTimeout = setTimeout(() => {
+        if (pdfDoc) {
+          renderPreview('current', currentPage, currentCanvas, currentLabel);
+          renderPreview('next', nextPage, nextCanvas, nextLabel);
+        }
+      }, 100);
+    });
+
+    // メッセージハンドリング
+    window.addEventListener('message', async (event) => {
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+      const data = event.data;
+      if (!data || typeof data !== 'object') {
+        return;
+      }
+
+      if (data.type === 'speaker-navigation-update' && data.handshake === handshake) {
+        currentPage = data.currentPage ?? 1;
+        nextPage = data.nextPage ?? null;
+        totalPages = data.totalPages ?? 0;
+
+        if (data.pdfUrl && (!pdfDoc || data.pdfUrl !== pdfUrl)) {
+          await loadPDF(data.pdfUrl);
+        }
+
+        await Promise.all([
+          renderPreview('current', currentPage, currentCanvas, currentLabel),
+          renderPreview('next', nextPage, nextCanvas, nextLabel)
+        ]);
+        updateChannel('channel: synced');
+        return;
+      }
+
+      if (data.type === 'speaker-ack' && data.handshake === handshake) {
+        updateChannel('channel: acknowledged');
+        try {
+          event.source?.postMessage({
+            type: 'speaker-log',
+            handshake,
+            message: 'Speaker view received ack'
+          }, event.origin);
+        } catch (error) {
+          console.error('Failed to confirm speaker ack', error);
+        }
+        return;
+      }
+
+      if (data.type === 'speaker-ping' && data.handshake === handshake) {
+        const label = data.label ? ` ${data.label}` : '';
+        updateChannel(`channel: ping${label}`);
+        try {
+          event.source?.postMessage({
+            type: 'speaker-pong',
+            handshake,
+            label: data.label,
+            timestamp: Date.now()
+          }, event.origin);
+        } catch (error) {
+          console.error('Failed to respond to ping', error);
+        }
+      }
+    });
+
+    // ホストに ready を送信
+    const notify = (attempt = 0) => {
+      try {
+        if (!window.opener) {
+          if (attempt < 100) {
+            window.requestAnimationFrame(() => notify(attempt + 1));
+          } else {
+            console.error('Speaker view: window.opener is not available.');
+            updateChannel('channel: error - no opener');
+          }
+          return;
+        }
+        if (window.opener.closed) {
+          console.warn('Speaker view: parent window is closed.');
+          updateChannel('channel: parent closed');
+          return;
+        }
+        updateChannel('channel: waiting for host…');
+        window.opener.postMessage({ type: 'speaker-ready', handshake }, window.location.origin);
+      } catch (error) {
+        console.error('Speaker view notify error:', error);
+        if (attempt < 100 && error.name !== 'SecurityError') {
+          window.requestAnimationFrame(() => notify(attempt + 1));
+        } else {
+          updateChannel('channel: error - ' + error.message);
+        }
+      }
+    };
+
+    const scheduleNotify = () => {
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(() => notify(), 0);
+      } else {
+        window.addEventListener('load', notify, { once: true });
+        document.addEventListener('DOMContentLoaded', () => notify(), { once: true });
+      }
+    };
+
+    scheduleNotify();
+  </script>
+</body>
+</html>
