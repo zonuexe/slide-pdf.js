@@ -3,6 +3,7 @@ import { throttle } from 'es-toolkit';
 
 const params = new URLSearchParams(window.location.search);
 const pdfUrlParam = params.get('slide');
+const isFinePointer = window.matchMedia('(pointer: fine)').matches;
 
 if (!pdfUrlParam) {
   alert('Please open this page with ?slide=<PDF URL>');
@@ -194,6 +195,10 @@ function wireClickNavigationZones() {
 function wireSpeakerViewControl() {
   const button = document.getElementById('js-speaker');
   if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  if (!isFinePointer) {
+    button.style.display = 'none';
     return;
   }
   button.addEventListener(
@@ -665,12 +670,20 @@ function showSpeakerButton() {
   if (!(button instanceof HTMLElement)) {
     return;
   }
+  if (!isFinePointer) {
+    button.style.display = 'none';
+    return;
+  }
   button.style.display = '';
 }
 
 function updateSpeakerButtonVisibility() {
   const button = document.getElementById('js-speaker');
   if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  if (!isFinePointer) {
+    button.style.display = 'none';
     return;
   }
   const currentPage = controller.pageNum ?? 1;

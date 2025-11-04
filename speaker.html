@@ -83,6 +83,11 @@
       text-align: center;
       color: #7dd3fc;
       opacity: 0.85;
+      transition: opacity 0.2s ease-in-out;
+    }
+    .speaker-channel-indicator.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -127,11 +132,40 @@
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.mjs', import.meta.url).toString();
 
-    const updateChannel = (text) => {
-      if (channelIndicator) {
-        channelIndicator.textContent = text;
+    const defaultChannelText = 'channel: connecting…';
+    const updateChannel = (
+      text,
+      { highlight = false, pulse = false, hideAfter = false, force = false } = {}
+    ) => {
+      if (!channelIndicator) {
+        return;
+      }
+      const shouldHide = !force && (!text || text === 'channel: synced');
+      if (shouldHide) {
+        channelIndicator.textContent = '';
+        channelIndicator.classList.add('hidden');
+        channelIndicator.classList.remove('pulse', 'green', 'amber', 'red');
+        return;
+      }
+      channelIndicator.classList.remove('hidden');
+      channelIndicator.textContent = text;
+      channelIndicator.classList.toggle('pulse', Boolean(pulse));
+      if (highlight) {
+        channelIndicator.classList.add('green');
+        channelIndicator.classList.remove('amber', 'red');
+      } else {
+        channelIndicator.classList.remove('green');
+      }
+      if (hideAfter) {
+        setTimeout(() => {
+          if (channelIndicator.textContent === text) {
+            channelIndicator.textContent = '';
+            channelIndicator.classList.add('hidden');
+          }
+        }, 800);
       }
     };
+    updateChannel(defaultChannelText, { force: true });
 
     // 時計の更新
     const formatter = new Intl.DateTimeFormat(undefined, {
@@ -172,7 +206,7 @@
     // PDF読み込み
     async function loadPDF(url) {
       try {
-        updateChannel('channel: loading PDF…');
+        updateChannel('channel: loading PDF…', { force: true });
         const loadingTask = pdfjsLib.getDocument({
           url: url,
           cMapUrl: new URL('./cmaps/', import.meta.url).toString(),
@@ -180,11 +214,11 @@
         });
         pdfDoc = await loadingTask.promise;
         totalPages = pdfDoc.numPages;
-        updateChannel('channel: PDF loaded');
+        updateChannel('channel: PDF loaded', { highlight: true, pulse: true, hideAfter: true, force: true });
         return true;
       } catch (error) {
         console.error('Failed to load PDF', error);
-        updateChannel('channel: error - PDF load failed');
+        updateChannel('channel: error - PDF load failed', { force: true });
         return false;
       }
     }
@@ -326,12 +360,12 @@
           renderPreview('current', currentPage, currentCanvas, currentLabel),
           renderPreview('next', nextPage, nextCanvas, nextLabel)
         ]);
-        updateChannel('channel: synced');
+        updateChannel('', { force: false });
         return;
       }
 
       if (data.type === 'speaker-ack' && data.handshake === handshake) {
-        updateChannel('channel: acknowledged');
+        updateChannel('channel: acknowledged', { pulse: true, hideAfter: true, force: true });
         try {
           event.source?.postMessage({
             type: 'speaker-log',
@@ -346,7 +380,7 @@
 
       if (data.type === 'speaker-ping' && data.handshake === handshake) {
         const label = data.label ? ` ${data.label}` : '';
-        updateChannel(`channel: ping${label}`);
+        updateChannel('', { force: false });
         try {
           event.source?.postMessage({
             type: 'speaker-pong',
@@ -368,23 +402,23 @@
             window.requestAnimationFrame(() => notify(attempt + 1));
           } else {
             console.error('Speaker view: window.opener is not available.');
-            updateChannel('channel: error - no opener');
+            updateChannel('channel: error - no opener', { force: true });
           }
           return;
         }
         if (window.opener.closed) {
           console.warn('Speaker view: parent window is closed.');
-          updateChannel('channel: parent closed');
+          updateChannel('channel: parent closed', { force: true });
           return;
         }
-        updateChannel('channel: waiting for host…');
+        updateChannel('channel: waiting for host…', { force: true });
         window.opener.postMessage({ type: 'speaker-ready', handshake }, window.location.origin);
       } catch (error) {
         console.error('Speaker view notify error:', error);
         if (attempt < 100 && error.name !== 'SecurityError') {
           window.requestAnimationFrame(() => notify(attempt + 1));
         } else {
-          updateChannel('channel: error - ' + error.message);
+          updateChannel('channel: error - ' + error.message, { force: true });
         }
       }
     };

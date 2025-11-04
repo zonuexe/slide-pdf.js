@@ -73,3 +73,9 @@ body {
     }
   }
 }
+
+@media (pointer: coarse) {
+  .controls .speaker-button {
+    display: none !important;
+  }
+}
