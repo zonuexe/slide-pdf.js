@@ -27,7 +27,9 @@ type RabbitTimerDomRefs = {
   track: HTMLElement;
   turtle: HTMLImageElement;
   bunny: HTMLImageElement;
-  status: HTMLElement;
+  status: HTMLElement | null;
+  elapsedFlag: HTMLElement;
+  totalFlag: HTMLElement;
 };
 
 type RabbitTimerSpeakerState = 'idle' | 'running' | 'completed' | 'error';
@@ -767,13 +769,16 @@ function setupRabbitTimerControls() {
   const turtle = document.getElementById('js-rabbit-turtle');
   const bunny = document.getElementById('js-rabbit-bunny');
   const status = document.getElementById('js-rabbit-status');
+  const elapsedFlag = document.getElementById('js-rabbit-flag-elapsed');
+  const totalFlag = document.getElementById('js-rabbit-flag-total');
 
   if (
     !(root instanceof HTMLElement) ||
     !(track instanceof HTMLElement) ||
     !(turtle instanceof HTMLImageElement) ||
     !(bunny instanceof HTMLImageElement) ||
-    !(status instanceof HTMLElement)
+    !(elapsedFlag instanceof HTMLElement) ||
+    !(totalFlag instanceof HTMLElement)
   ) {
     return;
   }
@@ -783,7 +788,9 @@ function setupRabbitTimerControls() {
     track,
     turtle,
     bunny,
-    status
+    status: status instanceof HTMLElement ? status : null,
+    elapsedFlag,
+    totalFlag
   };
 }
 
@@ -819,6 +826,8 @@ function startRabbitTimer(options?: { minutes?: number; intervalSeconds?: number
   rabbitTimerState.lastTimeRatio = -1;
   rabbitTimerState.turtleStepMs = turtleStepMs;
   dom.root.classList.add('rabbit-timer--visible');
+  dom.totalFlag.textContent = formatMinutesLabel(minutesValue);
+  dom.elapsedFlag.textContent = '0';
 
   if (rabbitTimerState.intervalId !== null) {
     window.clearInterval(rabbitTimerState.intervalId);
@@ -854,6 +863,7 @@ function updateRabbitTimerTick(forceStatusUpdate = false) {
   const elapsedMs = Math.max(0, now - rabbitTimerState.startTimestamp);
   const cappedElapsed = Math.min(elapsedMs, rabbitTimerState.durationMs);
   const timerCompleted = elapsedMs >= rabbitTimerState.durationMs;
+  rabbitTimerState.dom.elapsedFlag.textContent = formatElapsedMinutesLabel(cappedElapsed);
 
   updateRabbitTurtleProgress(cappedElapsed, timerCompleted);
 
@@ -940,7 +950,7 @@ function refreshRabbitTimerPositions() {
 }
 
 function setRabbitStatus(message: string) {
-  if (!rabbitTimerState.dom) {
+  if (!rabbitTimerState.dom || !rabbitTimerState.dom.status) {
     return;
   }
   rabbitTimerState.dom.status.textContent = message;
@@ -977,6 +987,13 @@ function formatMinutesLabel(value: number): string {
     return '';
   }
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+}
+
+function formatElapsedMinutesLabel(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) {
+    return '0';
+  }
+  return Math.floor(ms / 60000).toString();
 }
 
 function notifySpeakerRabbitStatus(

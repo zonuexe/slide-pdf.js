@@ -18,10 +18,11 @@
     <div id="js-next" class="arrow next"></div>
 </div>
 <div id="js-rabbit-timer" class="rabbit-timer">
-    <div class="rabbit-timer__panel">
-        <span id="js-rabbit-status" class="rabbit-timer__status" aria-live="polite"></span>
-    </div>
     <div id="js-rabbit-track" class="rabbit-timer__track" aria-hidden="true">
+        <div class="rabbit-timer__flag rabbit-timer__flag--elapsed">
+            <div class="rabbit-timer__flag-pole"></div>
+            <span id="js-rabbit-flag-elapsed" class="rabbit-timer__flag-text">0</span>
+        </div>
         <img
             id="js-rabbit-turtle"
             class="rabbit-timer__sprite rabbit-timer__sprite--turtle"
@@ -38,6 +39,10 @@
             width="94"
             height="136"
         />
+        <div class="rabbit-timer__flag rabbit-timer__flag--total">
+            <div class="rabbit-timer__flag-pole"></div>
+            <span id="js-rabbit-flag-total" class="rabbit-timer__flag-text">0</span>
+        </div>
     </div>
 </div>
 <script type="importmap">

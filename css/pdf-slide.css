@@ -125,6 +125,7 @@ body {
   inset-block-end: 0;
   height: 180px;
   pointer-events: none;
+  padding-inline: 1.5rem;
 }
 
 .rabbit-timer__track::before {
@@ -148,6 +149,54 @@ body {
   inset-inline-start: 0;
   transform: translate3d(0, 0, 0);
   transition: transform 0.6s ease;
+}
+
+.rabbit-timer__flag {
+  position: absolute;
+  inset-block-end: 100px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.rabbit-timer__flag-pole {
+  width: 4px;
+  height: 90px;
+  background: rgba(10, 10, 10, 0.9);
+  border-radius: 2px;
+}
+
+.rabbit-timer__flag-text {
+  min-width: 3rem;
+  min-height: 3rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: 0.2rem;
+  border: 2px solid rgba(8, 8, 8, 0.8);
+  background: rgba(15, 15, 15, 0.85);
+  text-align: center;
+  color: #fefefe;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.rabbit-timer__flag--elapsed {
+  inset-inline-start: 1.5rem;
+}
+
+.rabbit-timer__flag--elapsed .rabbit-timer__flag-text {
+  background: linear-gradient(180deg, #ff4b4b, #c01818);
+  color: #fff;
+}
+
+.rabbit-timer__flag--total {
+  inset-inline-end: 1.5rem;
+}
+
+.rabbit-timer__flag--total .rabbit-timer__flag-text {
+  background: linear-gradient(180deg, #0d47a1, #042052);
 }
 
 @media (max-width: 640px) {
