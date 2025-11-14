@@ -78,6 +78,60 @@
       font-weight: 600;
       margin-top: auto;
     }
+    .speaker-rabbit-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 1rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+    }
+    .speaker-rabbit-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .speaker-rabbit-panel label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #c0c0c0;
+    }
+    .speaker-rabbit-input {
+      width: 5rem;
+      padding: 0.4rem 0.5rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(0, 0, 0, 0.3);
+      color: inherit;
+      font-size: 1rem;
+    }
+    .speaker-rabbit-input:focus-visible {
+      outline: 2px solid #7dd3fc;
+      outline-offset: 2px;
+    }
+    .speaker-rabbit-button {
+      padding: 0.45rem 1rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: #7dd3fc;
+      color: #05121a;
+      font-weight: 600;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .speaker-rabbit-button:hover,
+    .speaker-rabbit-button:focus-visible {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(125, 211, 252, 0.5);
+      outline: none;
+    }
+    .speaker-rabbit-status {
+      font-size: 0.85rem;
+      color: #d1d5db;
+      min-height: 1.2rem;
+    }
     .speaker-channel-indicator {
       font-size: 0.8rem;
       text-align: center;
@@ -108,6 +162,23 @@
       </div>
     </div>
     <div class="speaker-clock" id="js-speaker-clock">--:--:--</div>
+    <div class="speaker-rabbit-panel">
+      <div class="speaker-rabbit-row">
+        <label for="js-speaker-rabbit-duration">Rabbit timer (minutes)</label>
+        <input
+          id="js-speaker-rabbit-duration"
+          class="speaker-rabbit-input"
+          type="number"
+          inputmode="decimal"
+          min="0.1"
+          step="0.1"
+          placeholder="5"
+          value="5"
+        />
+        <button id="js-speaker-rabbit-start" class="speaker-rabbit-button" type="button">Start Rabbit</button>
+      </div>
+      <div id="js-speaker-rabbit-status" class="speaker-rabbit-status" aria-live="polite">Timer idle.</div>
+    </div>
     <div class="speaker-channel-indicator" id="js-speaker-channel">channel: connecting…</div>
   </div>
   <noscript>Enable JavaScript to use the speaker view.</noscript>
@@ -123,6 +194,9 @@
     const currentCanvas = document.getElementById('js-speaker-current-canvas');
     const nextCanvas = document.getElementById('js-speaker-next-canvas');
     const clockElement = document.getElementById('js-speaker-clock');
+    const rabbitDurationInput = document.getElementById('js-speaker-rabbit-duration');
+    const rabbitStartButton = document.getElementById('js-speaker-rabbit-start');
+    const rabbitStatus = document.getElementById('js-speaker-rabbit-status');
 
     let pdfDoc = null;
     let currentPage = 1;
@@ -180,6 +254,62 @@
     };
     updateClock();
     setInterval(updateClock, 1000);
+
+    const updateRabbitPanelStatus = (text, state = 'idle') => {
+      if (!rabbitStatus) return;
+      rabbitStatus.textContent = text;
+      rabbitStatus.dataset.state = state;
+    };
+
+    const requestRabbitTimerStart = () => {
+      if (!(rabbitDurationInput instanceof HTMLInputElement)) {
+        updateRabbitPanelStatus('Rabbit timer unavailable.', 'error');
+        return;
+      }
+
+      const minutesValue = Number.isNaN(rabbitDurationInput.valueAsNumber)
+        ? Number.parseFloat(rabbitDurationInput.value)
+        : rabbitDurationInput.valueAsNumber;
+
+      if (!Number.isFinite(minutesValue) || minutesValue <= 0) {
+        updateRabbitPanelStatus('Enter a positive number of minutes.', 'error');
+        rabbitDurationInput.focus();
+        rabbitDurationInput.select();
+        return;
+      }
+
+      if (!window.opener || window.opener.closed) {
+        updateRabbitPanelStatus('Host window unavailable.', 'error');
+        return;
+      }
+
+      try {
+        window.opener.postMessage(
+          {
+            type: 'speaker-rabbit-start',
+            handshake,
+            minutes: minutesValue
+          },
+          window.location.origin
+        );
+        updateRabbitPanelStatus(`Requested Rabbit timer: ${minutesValue} min`, 'running');
+      } catch (error) {
+        console.error('Failed to request Rabbit timer', error);
+        updateRabbitPanelStatus('Could not send Rabbit timer request.', 'error');
+      }
+    };
+
+    if (rabbitStartButton instanceof HTMLButtonElement) {
+      rabbitStartButton.addEventListener('click', requestRabbitTimerStart);
+    }
+    if (rabbitDurationInput instanceof HTMLInputElement) {
+      rabbitDurationInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          requestRabbitTimerStart();
+        }
+      });
+    }
 
     // キーボードイベントをホストに転送
     const handleKeydown = (event) => {
@@ -375,6 +505,11 @@
         } catch (error) {
           console.error('Failed to confirm speaker ack', error);
         }
+        return;
+      }
+
+      if (data.type === 'rabbit-timer-status' && data.handshake === handshake) {
+        updateRabbitPanelStatus(data.message ?? '', data.state ?? 'idle');
         return;
       }
 
