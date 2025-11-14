@@ -79,3 +79,85 @@ body {
     display: none !important;
   }
 }
+
+.rabbit-timer {
+  position: fixed;
+  inset-inline-start: 0;
+  inset-block-end: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 10;
+  font-size: 0.9rem;
+  color: #f5f5f5;
+  font-family: inherit;
+  display: none;
+}
+
+.rabbit-timer.rabbit-timer--visible {
+  display: block;
+}
+
+.rabbit-timer__panel {
+  position: absolute;
+  inset-inline-start: 1rem;
+  inset-block-end: calc(180px + 1rem);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(12, 12, 12, 0.7);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.rabbit-timer__status {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.rabbit-timer__track {
+  display: none;
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 180px;
+  pointer-events: none;
+}
+
+.rabbit-timer__track::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.5) 25%, rgba(255, 255, 255, 0) 25%);
+  background-size: 30px 100%;
+  opacity: 0.7;
+}
+
+.rabbit-timer--visible .rabbit-timer__track {
+  display: block;
+}
+
+.rabbit-timer__sprite {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.6s ease;
+}
+
+@media (max-width: 640px) {
+  .rabbit-timer__panel {
+    inset-inline-start: 0.5rem;
+    inset-block-end: calc(180px + 0.5rem);
+    margin-inline-end: 0.5rem;
+  }
+
+  .rabbit-timer__status {
+    width: 100%;
+  }
+}

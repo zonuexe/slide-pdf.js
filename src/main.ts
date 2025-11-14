@@ -20,6 +20,40 @@ let controlsElement: HTMLElement | null = null;
 const eventRegistry = new AbortController();
 const { signal: eventSignal } = eventRegistry;
 
+const RABBIT_TURTLE_STEP_MS = 10000;
+
+type RabbitTimerDomRefs = {
+  root: HTMLElement;
+  track: HTMLElement;
+  turtle: HTMLImageElement;
+  bunny: HTMLImageElement;
+  status: HTMLElement;
+};
+
+type RabbitTimerSpeakerState = 'idle' | 'running' | 'completed' | 'error';
+
+type RabbitTimerState = {
+  dom: RabbitTimerDomRefs | null;
+  durationMs: number;
+  startTimestamp: number | null;
+  intervalId: number | null;
+  isRunning: boolean;
+  hasStarted: boolean;
+  lastTimeRatio: number;
+  lastPageRatio: number;
+};
+
+const rabbitTimerState: RabbitTimerState = {
+  dom: null,
+  durationMs: 0,
+  startTimestamp: null,
+  intervalId: null,
+  isRunning: false,
+  hasStarted: false,
+  lastTimeRatio: -1,
+  lastPageRatio: -1
+};
+
 
 let speakerWindowRef: Window | null = null;
 let speakerHandshakeToken: string | null = null;
@@ -37,6 +71,10 @@ window.addEventListener(
 
 eventSignal.addEventListener('abort', () => {
   closeSpeakerWindow();
+  if (rabbitTimerState.intervalId !== null) {
+    window.clearInterval(rabbitTimerState.intervalId);
+    rabbitTimerState.intervalId = null;
+  }
 });
 
 window.addEventListener(
@@ -82,6 +120,7 @@ async function initializeNavigation() {
   wireResizeHandler();
   wireSwipeGestures();
   setupControlsVisibility();
+  setupRabbitTimerControls();
   // 初期表示時は常にSpeakerボタンを表示
   showSpeakerButton();
 }
@@ -380,6 +419,7 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
     timestamp?: number;
     message?: string;
     key?: string;
+    minutes?: number;
   };
 
   if (data.type === 'speaker-ready') {
@@ -416,6 +456,13 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
         if (handleNavigationKey(syntheticEvent)) {
           syntheticEvent.preventDefault();
         }
+      }
+      break;
+    case 'speaker-rabbit-start':
+      if (typeof data.minutes === 'number' && Number.isFinite(data.minutes) && data.minutes > 0) {
+        startRabbitTimer({ minutes: data.minutes, initiatedBy: 'speaker' });
+      } else {
+        startRabbitTimer({ initiatedBy: 'speaker' });
       }
       break;
     default:
@@ -520,6 +567,7 @@ function wireResizeHandler() {
     'resize',
     throttle(() => {
       void controller.fitItSize();
+      refreshRabbitTimerPositions();
       scheduleSpeakerViewUpdate();
     }, 100),
     { signal: eventSignal }
@@ -657,6 +705,7 @@ function postNavigationUpdate() {
   updatePageAttribute();
   updateURL();
   updateSpeakerButtonVisibility();
+  updateRabbitPageProgress();
   scheduleSpeakerViewUpdate();
   sendSpeakerPing('navigation-update');
 }
@@ -699,5 +748,224 @@ function updateURL() {
   const newHash = `#p=${controller.pageNum}`;
   if (window.location.hash !== newHash) {
     window.history.replaceState(null, document.title, newHash);
+  }
+}
+
+function setupRabbitTimerControls() {
+  const root = document.getElementById('js-rabbit-timer');
+  const track = document.getElementById('js-rabbit-track');
+  const turtle = document.getElementById('js-rabbit-turtle');
+  const bunny = document.getElementById('js-rabbit-bunny');
+  const status = document.getElementById('js-rabbit-status');
+
+  if (
+    !(root instanceof HTMLElement) ||
+    !(track instanceof HTMLElement) ||
+    !(turtle instanceof HTMLImageElement) ||
+    !(bunny instanceof HTMLImageElement) ||
+    !(status instanceof HTMLElement)
+  ) {
+    return;
+  }
+
+  rabbitTimerState.dom = {
+    root,
+    track,
+    turtle,
+    bunny,
+    status
+  };
+}
+
+function startRabbitTimer(options?: { minutes?: number; initiatedBy?: 'speaker' | 'host' }) {
+  const dom = rabbitTimerState.dom;
+  if (!dom) {
+    if (options?.initiatedBy === 'speaker') {
+      notifySpeakerRabbitStatus('error', 'Rabbit timer UI is unavailable.');
+    }
+    return;
+  }
+  const initiatedBy: 'speaker' | 'host' = options?.initiatedBy ?? 'host';
+  const minutesValue = options?.minutes;
+  if (!Number.isFinite(minutesValue) || minutesValue <= 0) {
+    const message =
+      initiatedBy === 'speaker'
+        ? 'Invalid Rabbit timer request. Enter minutes in the speaker view.'
+        : 'Provide a positive number of minutes to start the Rabbit timer.';
+    setRabbitStatus(message);
+    notifySpeakerRabbitStatus('error', message);
+    return;
+  }
+  const durationMs = Math.max(minutesValue * 60 * 1000, 1000);
+  rabbitTimerState.durationMs = durationMs;
+  rabbitTimerState.startTimestamp = Date.now();
+  rabbitTimerState.isRunning = true;
+  rabbitTimerState.hasStarted = true;
+  rabbitTimerState.lastTimeRatio = -1;
+  dom.root.classList.add('rabbit-timer--visible');
+
+  if (rabbitTimerState.intervalId !== null) {
+    window.clearInterval(rabbitTimerState.intervalId);
+  }
+  rabbitTimerState.intervalId = window.setInterval(() => {
+    updateRabbitTimerTick();
+  }, 1000);
+
+  const minutesLabel = formatMinutesLabel(minutesValue);
+  notifySpeakerRabbitStatus('running', `Rabbit timer started (${minutesLabel} min).`);
+
+  window.requestAnimationFrame(() => {
+    updateRabbitTimerTick(true);
+    updateRabbitPageProgress(true);
+    refreshRabbitTimerPositions();
+  });
+}
+
+function updateRabbitTimerTick(forceStatusUpdate = false) {
+  if (!rabbitTimerState.dom || !rabbitTimerState.hasStarted || rabbitTimerState.startTimestamp === null) {
+    return;
+  }
+  const now = Date.now();
+  const elapsedMs = Math.max(0, now - rabbitTimerState.startTimestamp);
+  const cappedElapsed = Math.min(elapsedMs, rabbitTimerState.durationMs);
+  const timerCompleted = elapsedMs >= rabbitTimerState.durationMs;
+
+  updateRabbitTurtleProgress(cappedElapsed, timerCompleted);
+
+  if (rabbitTimerState.isRunning || forceStatusUpdate || timerCompleted) {
+    const elapsedLabel = formatDuration(cappedElapsed);
+    const totalLabel = formatDuration(rabbitTimerState.durationMs);
+    let statusMessage: string | null = null;
+    let speakerState: RabbitTimerSpeakerState | null = null;
+    if (timerCompleted && rabbitTimerState.isRunning) {
+      rabbitTimerState.isRunning = false;
+      statusMessage = `Time's up! ${totalLabel} elapsed.`;
+      speakerState = 'completed';
+    } else if (rabbitTimerState.isRunning) {
+      statusMessage = `Timer running: ${elapsedLabel} / ${totalLabel}`;
+    } else if (forceStatusUpdate) {
+      statusMessage = `Timer paused at ${elapsedLabel} / ${totalLabel}`;
+    }
+    if (statusMessage) {
+      setRabbitStatus(statusMessage);
+      if (speakerState) {
+        notifySpeakerRabbitStatus(speakerState, statusMessage);
+      }
+    }
+  }
+
+  if (!rabbitTimerState.isRunning && rabbitTimerState.intervalId !== null) {
+    window.clearInterval(rabbitTimerState.intervalId);
+    rabbitTimerState.intervalId = null;
+  }
+}
+
+function updateRabbitTurtleProgress(elapsedMs: number, timerCompleted: boolean) {
+  const dom = rabbitTimerState.dom;
+  if (!dom || rabbitTimerState.durationMs <= 0) {
+    return;
+  }
+  let ratio = 0;
+  if (timerCompleted) {
+    ratio = 1;
+  } else if (rabbitTimerState.durationMs > 0) {
+    const quantizedMs = Math.floor(elapsedMs / RABBIT_TURTLE_STEP_MS) * RABBIT_TURTLE_STEP_MS;
+    ratio = Math.min(quantizedMs / rabbitTimerState.durationMs, 1);
+  }
+  ratio = Math.max(0, Math.min(1, ratio));
+  if (!timerCompleted && ratio === rabbitTimerState.lastTimeRatio) {
+    return;
+  }
+  rabbitTimerState.lastTimeRatio = ratio;
+  setRabbitCharacterPosition(dom.turtle, ratio);
+}
+
+function updateRabbitPageProgress(force = false) {
+  const dom = rabbitTimerState.dom;
+  if (!dom) {
+    return;
+  }
+  const totalPages = controller.pageCount ?? controller.pdfDoc?.numPages ?? 0;
+  const currentPage = controller.pageNum ?? 1;
+  if (!totalPages || totalPages <= 0) {
+    return;
+  }
+  const ratio = Math.max(0, Math.min(1, currentPage / totalPages));
+  if (!force && ratio === rabbitTimerState.lastPageRatio) {
+    return;
+  }
+  rabbitTimerState.lastPageRatio = ratio;
+  setRabbitCharacterPosition(dom.bunny, ratio);
+}
+
+function refreshRabbitTimerPositions() {
+  if (!rabbitTimerState.dom || !rabbitTimerState.hasStarted) {
+    return;
+  }
+  if (rabbitTimerState.lastTimeRatio >= 0) {
+    setRabbitCharacterPosition(rabbitTimerState.dom.turtle, Math.max(0, rabbitTimerState.lastTimeRatio));
+  }
+  if (rabbitTimerState.lastPageRatio >= 0) {
+    setRabbitCharacterPosition(rabbitTimerState.dom.bunny, Math.max(0, rabbitTimerState.lastPageRatio));
+  }
+}
+
+function setRabbitStatus(message: string) {
+  if (!rabbitTimerState.dom) {
+    return;
+  }
+  rabbitTimerState.dom.status.textContent = message;
+}
+
+function setRabbitCharacterPosition(element: HTMLElement, ratio: number) {
+  const dom = rabbitTimerState.dom;
+  if (!dom) {
+    return;
+  }
+  const trackWidth = dom.track.clientWidth;
+  if (trackWidth <= 0) {
+    return;
+  }
+  const elementWidth = element.clientWidth || (element instanceof HTMLImageElement ? element.naturalWidth : 0) || 0;
+  const availableWidth = Math.max(trackWidth - elementWidth, 0);
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const offset = availableWidth * clampedRatio;
+  element.style.transform = `translate3d(${offset}px, 0, 0)`;
+}
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return '0:00';
+  }
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatMinutesLabel(value: number): string {
+  if (!Number.isFinite(value)) {
+    return '';
+  }
+  return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+}
+
+function notifySpeakerRabbitStatus(state: RabbitTimerSpeakerState, message: string) {
+  if (!speakerWindowRef || speakerWindowRef.closed || !speakerHandshakeToken) {
+    return;
+  }
+  try {
+    const origin = getSpeakerOrigin();
+    speakerWindowRef.postMessage(
+      {
+        type: 'rabbit-timer-status',
+        handshake: speakerHandshakeToken,
+        state,
+        message
+      },
+      origin
+    );
+  } catch (error) {
+    console.warn('Failed to share Rabbit timer status with speaker view', error);
   }
 }
