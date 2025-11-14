@@ -62,3 +62,9 @@ const bundleSource = path.join(projectRoot, 'app.js');
 const bundleTarget = path.join(buildDir, 'app.js');
 copyIfExists(bundleSource, bundleTarget);
 copyIfExists(`${bundleSource}.map`, `${bundleTarget}.map`);
+
+const imagesSource = path.join(projectRoot, 'images');
+const imagesTarget = path.join(buildDir, 'images');
+if (fs.existsSync(imagesSource)) {
+  copyDir(imagesSource, imagesTarget);
+}
