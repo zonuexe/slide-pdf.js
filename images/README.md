@@ -21,3 +21,21 @@ You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ```
+
+ * ![mini-kame-taro.png](./mini-kame-taro.png)
+ * ![mini-usa-taro.png](./mini-usa-taro.png)
+
+## Elephpant artwork
+
+`elephpant.svg` and the derived `elephpant-mirrored.svg` are copied from the Commons file [Webysther_20160423_-_Elephpant.svg](https://commons.wikimedia.org/wiki/File:Webysther_20160423_-_Elephpant.svg), which depicts the official PHP mascot by Vincent Pontier (1998). Original artwork sources:
+
+ * Description: PHP mascot
+ * Date: 1998
+ * Sources: <http://www.elroubio.net/elephpant_download.php>, <http://php.net/elephpant.php>
+ * Author: Vincent Pontier
+ * Reuse permission: <http://www.php100.com/elephant/film/> (archived at <https://web.archive.org/web/20091026111727/http://www.php100.com/elephant/film/>)
+
+Per the upstream license, these SVGs are distributed under GPL-2.0-or-later alongside the Rabbit images. The full license text is available in [`GPL`](./GPL).
+
+ * ![elephpant.svg](./elephpant.svg)
+ * ![elephpant-mirrored.svg](./elephpant-mirrored.svg)

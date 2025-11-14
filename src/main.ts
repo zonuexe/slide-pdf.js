@@ -21,6 +21,12 @@ const eventRegistry = new AbortController();
 const { signal: eventSignal } = eventRegistry;
 
 const DEFAULT_RABBIT_TURTLE_STEP_MS = 5000;
+const RABBIT_SPRITE_SOURCES = {
+  elephpant: './images/elephpant-mirrored.svg',
+  turtle: './images/mini-kame-taro.png'
+} as const;
+type RabbitSpriteType = keyof typeof RABBIT_SPRITE_SOURCES;
+const DEFAULT_RABBIT_SPRITE: RabbitSpriteType = 'elephpant';
 
 type RabbitTimerDomRefs = {
   root: HTMLElement;
@@ -39,6 +45,7 @@ type RabbitTimerStatusExtras = {
   intervalSeconds?: number;
   elapsedMs?: number;
   durationMs?: number;
+  sprite?: RabbitSpriteType;
 };
 
 type RabbitTimerState = {
@@ -51,6 +58,7 @@ type RabbitTimerState = {
   lastTimeRatio: number;
   lastPageRatio: number;
   turtleStepMs: number;
+  spriteType: RabbitSpriteType;
 };
 
 const rabbitTimerState: RabbitTimerState = {
@@ -62,7 +70,8 @@ const rabbitTimerState: RabbitTimerState = {
   hasStarted: false,
   lastTimeRatio: -1,
   lastPageRatio: -1,
-  turtleStepMs: DEFAULT_RABBIT_TURTLE_STEP_MS
+  turtleStepMs: DEFAULT_RABBIT_TURTLE_STEP_MS,
+  spriteType: DEFAULT_RABBIT_SPRITE
 };
 
 
@@ -432,6 +441,7 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
     key?: string;
     minutes?: number;
     intervalSeconds?: number;
+    sprite?: string;
   };
 
   if (data.type === 'speaker-ready') {
@@ -474,6 +484,7 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
       startRabbitTimer({
         minutes: data.minutes,
         intervalSeconds: data.intervalSeconds,
+        sprite: data.sprite,
         initiatedBy: 'speaker'
       });
       break;
@@ -792,9 +803,15 @@ function setupRabbitTimerControls() {
     elapsedFlag,
     totalFlag
   };
+  setRabbitSprite(DEFAULT_RABBIT_SPRITE);
 }
 
-function startRabbitTimer(options?: { minutes?: number; intervalSeconds?: number; initiatedBy?: 'speaker' | 'host' }) {
+function startRabbitTimer(options?: {
+  minutes?: number;
+  intervalSeconds?: number;
+  sprite?: string | null;
+  initiatedBy?: 'speaker' | 'host';
+}) {
   const dom = rabbitTimerState.dom;
   if (!dom) {
     if (options?.initiatedBy === 'speaker') {
@@ -825,6 +842,8 @@ function startRabbitTimer(options?: { minutes?: number; intervalSeconds?: number
   rabbitTimerState.hasStarted = true;
   rabbitTimerState.lastTimeRatio = -1;
   rabbitTimerState.turtleStepMs = turtleStepMs;
+  rabbitTimerState.spriteType = normalizeRabbitSprite(options?.sprite);
+  setRabbitSprite(rabbitTimerState.spriteType);
   dom.root.classList.add('rabbit-timer--visible');
   dom.totalFlag.textContent = formatMinutesLabel(minutesValue);
   dom.elapsedFlag.textContent = '0';
@@ -837,16 +856,13 @@ function startRabbitTimer(options?: { minutes?: number; intervalSeconds?: number
   }, 1000);
 
   const minutesLabel = formatMinutesLabel(minutesValue);
-  notifySpeakerRabbitStatus(
-    'running',
-    `Rabbit timer started (${minutesLabel} min).`,
-    {
-      minutes: minutesValue,
-      intervalSeconds: turtleStepMs / 1000,
-      elapsedMs: 0,
-      durationMs
-    }
-  );
+  notifySpeakerRabbitStatus('running', `Rabbit timer started (${minutesLabel} min).`, {
+    minutes: minutesValue,
+    intervalSeconds: turtleStepMs / 1000,
+    elapsedMs: 0,
+    durationMs,
+    sprite: rabbitTimerState.spriteType
+  });
 
   window.requestAnimationFrame(() => {
     updateRabbitTimerTick(true);
@@ -876,7 +892,8 @@ function updateRabbitTimerTick(forceStatusUpdate = false) {
       minutes: rabbitTimerState.durationMs / 60000,
       intervalSeconds: rabbitTimerState.turtleStepMs / 1000,
       elapsedMs: cappedElapsed,
-      durationMs: rabbitTimerState.durationMs
+      durationMs: rabbitTimerState.durationMs,
+      sprite: rabbitTimerState.spriteType
     };
     if (timerCompleted && rabbitTimerState.isRunning) {
       rabbitTimerState.isRunning = false;
@@ -954,6 +971,23 @@ function setRabbitStatus(message: string) {
     return;
   }
   rabbitTimerState.dom.status.textContent = message;
+}
+
+function normalizeRabbitSprite(input?: string | null): RabbitSpriteType {
+  if (input && Object.prototype.hasOwnProperty.call(RABBIT_SPRITE_SOURCES, input)) {
+    return input as RabbitSpriteType;
+  }
+  return DEFAULT_RABBIT_SPRITE;
+}
+
+function setRabbitSprite(type: RabbitSpriteType) {
+  rabbitTimerState.spriteType = type;
+  if (!rabbitTimerState.dom) {
+    return;
+  }
+  const src = RABBIT_SPRITE_SOURCES[type];
+  rabbitTimerState.dom.turtle.src = src;
+  rabbitTimerState.dom.turtle.setAttribute('data-sprite', type);
 }
 
 function setRabbitCharacterPosition(element: HTMLElement, ratio: number) {

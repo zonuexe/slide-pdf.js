@@ -149,6 +149,9 @@ body {
   inset-inline-start: 0;
   transform: translate3d(0, 0, 0);
   transition: transform 0.6s ease;
+  width: 134px;
+  height: 160px;
+  object-fit: contain;
 }
 
 .rabbit-timer__flag {

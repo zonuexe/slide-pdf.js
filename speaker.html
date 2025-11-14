@@ -186,6 +186,11 @@
           placeholder="5"
           value="5"
         />
+        <label for="js-speaker-rabbit-sprite">Character</label>
+        <select id="js-speaker-rabbit-sprite" class="speaker-rabbit-input speaker-rabbit-select">
+          <option value="elephpant" selected>Elephpant</option>
+          <option value="turtle">Rabbit turtle</option>
+        </select>
         <button id="js-speaker-rabbit-start" class="speaker-rabbit-button" type="button">Start Rabbit</button>
       </div>
       <div id="js-speaker-rabbit-status" class="speaker-rabbit-status" aria-live="polite">Timer idle.</div>
@@ -208,6 +213,7 @@
     const rabbitDurationInput = document.getElementById('js-speaker-rabbit-duration');
     const rabbitIntervalInput = document.getElementById('js-speaker-rabbit-interval');
     const rabbitStartButton = document.getElementById('js-speaker-rabbit-start');
+    const rabbitSpriteSelect = document.getElementById('js-speaker-rabbit-sprite');
     const rabbitStatus = document.getElementById('js-speaker-rabbit-status');
 
     let pdfDoc = null;
@@ -325,12 +331,15 @@
       }
 
       try {
+        const spriteValue =
+          rabbitSpriteSelect instanceof HTMLSelectElement ? rabbitSpriteSelect.value : 'elephpant';
         window.opener.postMessage(
           {
             type: 'speaker-rabbit-start',
             handshake,
             minutes: minutesValue,
-            intervalSeconds
+            intervalSeconds,
+            sprite: spriteValue
           },
           window.location.origin
         );
@@ -347,7 +356,7 @@
     if (rabbitStartButton instanceof HTMLButtonElement) {
       rabbitStartButton.addEventListener('click', requestRabbitTimerStart);
     }
-    const rabbitInputs = [rabbitDurationInput, rabbitIntervalInput];
+    const rabbitInputs = [rabbitDurationInput, rabbitIntervalInput, rabbitSpriteSelect];
     rabbitInputs.forEach((input) => {
       if (input instanceof HTMLInputElement) {
         input.addEventListener('keydown', (event) => {
@@ -558,11 +567,14 @@
 
       if (data.type === 'rabbit-timer-status' && data.handshake === handshake) {
         updateRabbitPanelStatus(data.message ?? '', data.state ?? 'idle', data);
-        if (data.state === 'running' && typeof data.intervalSeconds === 'number' && rabbitIntervalInput instanceof HTMLInputElement) {
+        if (typeof data.intervalSeconds === 'number' && rabbitIntervalInput instanceof HTMLInputElement) {
           rabbitIntervalInput.value = String(data.intervalSeconds);
         }
-        if (data.state === 'running' && typeof data.minutes === 'number' && rabbitDurationInput instanceof HTMLInputElement) {
+        if (typeof data.minutes === 'number' && rabbitDurationInput instanceof HTMLInputElement) {
           rabbitDurationInput.value = String(data.minutes);
+        }
+        if (data.sprite && rabbitSpriteSelect instanceof HTMLSelectElement) {
+          rabbitSpriteSelect.value = data.sprite;
         }
         return;
       }
