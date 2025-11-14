@@ -175,6 +175,17 @@
           placeholder="5"
           value="5"
         />
+        <label for="js-speaker-rabbit-interval">Turtle step (sec)</label>
+        <input
+          id="js-speaker-rabbit-interval"
+          class="speaker-rabbit-input"
+          type="number"
+          inputmode="decimal"
+          min="1"
+          step="1"
+          placeholder="5"
+          value="5"
+        />
         <button id="js-speaker-rabbit-start" class="speaker-rabbit-button" type="button">Start Rabbit</button>
       </div>
       <div id="js-speaker-rabbit-status" class="speaker-rabbit-status" aria-live="polite">Timer idle.</div>
@@ -195,6 +206,7 @@
     const nextCanvas = document.getElementById('js-speaker-next-canvas');
     const clockElement = document.getElementById('js-speaker-clock');
     const rabbitDurationInput = document.getElementById('js-speaker-rabbit-duration');
+    const rabbitIntervalInput = document.getElementById('js-speaker-rabbit-interval');
     const rabbitStartButton = document.getElementById('js-speaker-rabbit-start');
     const rabbitStatus = document.getElementById('js-speaker-rabbit-status');
 
@@ -255,9 +267,30 @@
     updateClock();
     setInterval(updateClock, 1000);
 
-    const updateRabbitPanelStatus = (text, state = 'idle') => {
+    const formatRabbitDuration = (ms) => {
+      if (!Number.isFinite(ms) || ms < 0) {
+        return '--:--';
+      }
+      const totalSeconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    const updateRabbitPanelStatus = (text, state = 'idle', extras = {}) => {
       if (!rabbitStatus) return;
-      rabbitStatus.textContent = text;
+      let nextText = text;
+      if ((!nextText || !nextText.trim()) && state === 'running') {
+        if (typeof extras.elapsedMs === 'number' && typeof extras.durationMs === 'number') {
+          nextText = `Timer: ${formatRabbitDuration(extras.elapsedMs)} / ${formatRabbitDuration(extras.durationMs)}`;
+        } else {
+          nextText = 'Timer running…';
+        }
+      }
+      if ((!nextText || !nextText.trim()) && state === 'completed') {
+        nextText = 'Timer completed.';
+      }
+      rabbitStatus.textContent = nextText;
       rabbitStatus.dataset.state = state;
     };
 
@@ -270,6 +303,14 @@
       const minutesValue = Number.isNaN(rabbitDurationInput.valueAsNumber)
         ? Number.parseFloat(rabbitDurationInput.value)
         : rabbitDurationInput.valueAsNumber;
+
+      let intervalSeconds = Number.isNaN(rabbitIntervalInput?.valueAsNumber ?? Number.NaN)
+        ? Number.parseFloat(rabbitIntervalInput?.value ?? '')
+        : rabbitIntervalInput?.valueAsNumber;
+
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
+        intervalSeconds = 5;
+      }
 
       if (!Number.isFinite(minutesValue) || minutesValue <= 0) {
         updateRabbitPanelStatus('Enter a positive number of minutes.', 'error');
@@ -288,11 +329,15 @@
           {
             type: 'speaker-rabbit-start',
             handshake,
-            minutes: minutesValue
+            minutes: minutesValue,
+            intervalSeconds
           },
           window.location.origin
         );
-        updateRabbitPanelStatus(`Requested Rabbit timer: ${minutesValue} min`, 'running');
+        updateRabbitPanelStatus(`Requested Rabbit timer: ${minutesValue} min`, 'running', {
+          elapsedMs: 0,
+          durationMs: minutesValue * 60 * 1000
+        });
       } catch (error) {
         console.error('Failed to request Rabbit timer', error);
         updateRabbitPanelStatus('Could not send Rabbit timer request.', 'error');
@@ -302,14 +347,17 @@
     if (rabbitStartButton instanceof HTMLButtonElement) {
       rabbitStartButton.addEventListener('click', requestRabbitTimerStart);
     }
-    if (rabbitDurationInput instanceof HTMLInputElement) {
-      rabbitDurationInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          requestRabbitTimerStart();
-        }
-      });
-    }
+    const rabbitInputs = [rabbitDurationInput, rabbitIntervalInput];
+    rabbitInputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) {
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            requestRabbitTimerStart();
+          }
+        });
+      }
+    });
 
     // キーボードイベントをホストに転送
     const handleKeydown = (event) => {
@@ -509,7 +557,13 @@
       }
 
       if (data.type === 'rabbit-timer-status' && data.handshake === handshake) {
-        updateRabbitPanelStatus(data.message ?? '', data.state ?? 'idle');
+        updateRabbitPanelStatus(data.message ?? '', data.state ?? 'idle', data);
+        if (data.state === 'running' && typeof data.intervalSeconds === 'number' && rabbitIntervalInput instanceof HTMLInputElement) {
+          rabbitIntervalInput.value = String(data.intervalSeconds);
+        }
+        if (data.state === 'running' && typeof data.minutes === 'number' && rabbitDurationInput instanceof HTMLInputElement) {
+          rabbitDurationInput.value = String(data.minutes);
+        }
         return;
       }
 

@@ -20,7 +20,7 @@ let controlsElement: HTMLElement | null = null;
 const eventRegistry = new AbortController();
 const { signal: eventSignal } = eventRegistry;
 
-const RABBIT_TURTLE_STEP_MS = 10000;
+const DEFAULT_RABBIT_TURTLE_STEP_MS = 5000;
 
 type RabbitTimerDomRefs = {
   root: HTMLElement;
@@ -32,6 +32,13 @@ type RabbitTimerDomRefs = {
 
 type RabbitTimerSpeakerState = 'idle' | 'running' | 'completed' | 'error';
 
+type RabbitTimerStatusExtras = {
+  minutes?: number;
+  intervalSeconds?: number;
+  elapsedMs?: number;
+  durationMs?: number;
+};
+
 type RabbitTimerState = {
   dom: RabbitTimerDomRefs | null;
   durationMs: number;
@@ -41,6 +48,7 @@ type RabbitTimerState = {
   hasStarted: boolean;
   lastTimeRatio: number;
   lastPageRatio: number;
+  turtleStepMs: number;
 };
 
 const rabbitTimerState: RabbitTimerState = {
@@ -51,7 +59,8 @@ const rabbitTimerState: RabbitTimerState = {
   isRunning: false,
   hasStarted: false,
   lastTimeRatio: -1,
-  lastPageRatio: -1
+  lastPageRatio: -1,
+  turtleStepMs: DEFAULT_RABBIT_TURTLE_STEP_MS
 };
 
 
@@ -420,6 +429,7 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
     message?: string;
     key?: string;
     minutes?: number;
+    intervalSeconds?: number;
   };
 
   if (data.type === 'speaker-ready') {
@@ -459,11 +469,11 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
       }
       break;
     case 'speaker-rabbit-start':
-      if (typeof data.minutes === 'number' && Number.isFinite(data.minutes) && data.minutes > 0) {
-        startRabbitTimer({ minutes: data.minutes, initiatedBy: 'speaker' });
-      } else {
-        startRabbitTimer({ initiatedBy: 'speaker' });
-      }
+      startRabbitTimer({
+        minutes: data.minutes,
+        intervalSeconds: data.intervalSeconds,
+        initiatedBy: 'speaker'
+      });
       break;
     default:
       break;
@@ -777,7 +787,7 @@ function setupRabbitTimerControls() {
   };
 }
 
-function startRabbitTimer(options?: { minutes?: number; initiatedBy?: 'speaker' | 'host' }) {
+function startRabbitTimer(options?: { minutes?: number; intervalSeconds?: number; initiatedBy?: 'speaker' | 'host' }) {
   const dom = rabbitTimerState.dom;
   if (!dom) {
     if (options?.initiatedBy === 'speaker') {
@@ -796,12 +806,18 @@ function startRabbitTimer(options?: { minutes?: number; initiatedBy?: 'speaker' 
     notifySpeakerRabbitStatus('error', message);
     return;
   }
+  let intervalSeconds = options?.intervalSeconds;
+  if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
+    intervalSeconds = DEFAULT_RABBIT_TURTLE_STEP_MS / 1000;
+  }
+  const turtleStepMs = Math.max(Math.floor(intervalSeconds * 1000), 1000);
   const durationMs = Math.max(minutesValue * 60 * 1000, 1000);
   rabbitTimerState.durationMs = durationMs;
   rabbitTimerState.startTimestamp = Date.now();
   rabbitTimerState.isRunning = true;
   rabbitTimerState.hasStarted = true;
   rabbitTimerState.lastTimeRatio = -1;
+  rabbitTimerState.turtleStepMs = turtleStepMs;
   dom.root.classList.add('rabbit-timer--visible');
 
   if (rabbitTimerState.intervalId !== null) {
@@ -812,7 +828,16 @@ function startRabbitTimer(options?: { minutes?: number; initiatedBy?: 'speaker' 
   }, 1000);
 
   const minutesLabel = formatMinutesLabel(minutesValue);
-  notifySpeakerRabbitStatus('running', `Rabbit timer started (${minutesLabel} min).`);
+  notifySpeakerRabbitStatus(
+    'running',
+    `Rabbit timer started (${minutesLabel} min).`,
+    {
+      minutes: minutesValue,
+      intervalSeconds: turtleStepMs / 1000,
+      elapsedMs: 0,
+      durationMs
+    }
+  );
 
   window.requestAnimationFrame(() => {
     updateRabbitTimerTick(true);
@@ -837,20 +862,23 @@ function updateRabbitTimerTick(forceStatusUpdate = false) {
     const totalLabel = formatDuration(rabbitTimerState.durationMs);
     let statusMessage: string | null = null;
     let speakerState: RabbitTimerSpeakerState | null = null;
+    const extras: RabbitTimerStatusExtras = {
+      minutes: rabbitTimerState.durationMs / 60000,
+      intervalSeconds: rabbitTimerState.turtleStepMs / 1000,
+      elapsedMs: cappedElapsed,
+      durationMs: rabbitTimerState.durationMs
+    };
     if (timerCompleted && rabbitTimerState.isRunning) {
       rabbitTimerState.isRunning = false;
       statusMessage = `Time's up! ${totalLabel} elapsed.`;
       speakerState = 'completed';
-    } else if (rabbitTimerState.isRunning) {
-      statusMessage = `Timer running: ${elapsedLabel} / ${totalLabel}`;
-    } else if (forceStatusUpdate) {
-      statusMessage = `Timer paused at ${elapsedLabel} / ${totalLabel}`;
+      notifySpeakerRabbitStatus('completed', statusMessage, extras);
+    } else if (!timerCompleted) {
+      statusMessage = '';
+      notifySpeakerRabbitStatus('running', '', extras);
     }
-    if (statusMessage) {
+    if (statusMessage !== null) {
       setRabbitStatus(statusMessage);
-      if (speakerState) {
-        notifySpeakerRabbitStatus(speakerState, statusMessage);
-      }
     }
   }
 
@@ -865,11 +893,12 @@ function updateRabbitTurtleProgress(elapsedMs: number, timerCompleted: boolean) 
   if (!dom || rabbitTimerState.durationMs <= 0) {
     return;
   }
+  const stepMs = rabbitTimerState.turtleStepMs || DEFAULT_RABBIT_TURTLE_STEP_MS;
   let ratio = 0;
   if (timerCompleted) {
     ratio = 1;
   } else if (rabbitTimerState.durationMs > 0) {
-    const quantizedMs = Math.floor(elapsedMs / RABBIT_TURTLE_STEP_MS) * RABBIT_TURTLE_STEP_MS;
+    const quantizedMs = Math.floor(elapsedMs / stepMs) * stepMs;
     ratio = Math.min(quantizedMs / rabbitTimerState.durationMs, 1);
   }
   ratio = Math.max(0, Math.min(1, ratio));
@@ -950,7 +979,11 @@ function formatMinutesLabel(value: number): string {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
 
-function notifySpeakerRabbitStatus(state: RabbitTimerSpeakerState, message: string) {
+function notifySpeakerRabbitStatus(
+  state: RabbitTimerSpeakerState,
+  message: string,
+  extra?: RabbitTimerStatusExtras
+) {
   if (!speakerWindowRef || speakerWindowRef.closed || !speakerHandshakeToken) {
     return;
   }
@@ -961,7 +994,9 @@ function notifySpeakerRabbitStatus(state: RabbitTimerSpeakerState, message: stri
         type: 'rabbit-timer-status',
         handshake: speakerHandshakeToken,
         state,
-        message
+        message,
+        minutes: extra?.minutes,
+        intervalSeconds: extra?.intervalSeconds
       },
       origin
     );
