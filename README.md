@@ -1,19 +1,18 @@
 # slide-pdf.js
 
-Presentation tools for pdf file.
+Presentation tools for pdf file.  Show PDF slide using [pdf.js](https://github.com/mozilla/pdf.js "pdf.js").
 
-Show PDF slide using [pdf.js](https://github.com/mozilla/pdf.js "pdf.js").
-
-Example : [Deckset](http://decksetapp.com/ "Deckset for Mac: Turn your notes into beautiful presentations"), Power Point and Keynote.
+Example : [tadsan's slide deck](https://github.com/zonuexe/slides)
 
 ## Usage
 
-`https://azu.github.io/slide-pdf.js/?slide=<PDF URL>`
+```
+https://zonuexe.github.io/slide-pdf.js/?slide=<PDF URL>
+```
 
-e.g.) https://zonuexe.github.io/slide-pdf.js/?slide=test/fixtures/sourcemap.pdf
+e.g.) https://zonuexe.github.io/slide-pdf.js/?slide=/slides/pdf/20250827_build-your-own-slide-deck.pdf#p=1
 
-
-Please be careful for [Cross-origin resource sharing (CORS)](http://en.wikipedia.org/wiki/Cross-origin_resource_sharing "Cross-origin resource sharing (CORS)").
+Please be careful for [Cross-origin resource sharing (CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS "Cross-origin resource sharing (CORS)").
 
 ## Quick start
 
@@ -24,6 +23,16 @@ git push your_repo
 
 Use generator : [azu/pdf-slide-html](https://github.com/azu/pdf-slide-html "azu/pdf-slide-html")
 
+## Enhancements beyond [azu's original release](https://github.com/azu/slide-pdf.js)
+
+This fork continues development after azu's original project (see the diff at [azu...zonuexe](https://github.com/azu/slide-pdf.js/compare/master...zonuexe:slide-pdf.js:master)) and adds features such as:
+
+- **Rabbit presenter timer** – an overlay lane with Rabbit/Elephpant characters, elapsed/total flags, and page progress. The timer is driven from the speaker window, supports configurable duration/step intervals, and mirrors Rabbit's UI.
+- **Speaker view upgrades** – two-way handshake/heartbeat, remote keyboard forwarding, local PDF rendering, and the ability to start/stop the Rabbit timer (including choosing the sprite) without touching the projector screen.
+- **Modern build/deploy tooling & dependencies** – esbuild bundling, asset-copy script (worker/CMap/controller CSS), GitHub Pages deployment, and refreshed dependencies (e.g., [`@zonuexe/pdf.js-controller`](https://www.npmjs.com/package/@zonuexe/pdf.js-controller) plus the latest [`pdfjs-dist`](https://www.npmjs.com/package/pdfjs-dist)).
+
+See the commit history after the linked diff for the detailed implementation.
+
 ## Contributing
 
 1. Fork it!
@@ -32,13 +41,15 @@ Use generator : [azu/pdf-slide-html](https://github.com/azu/pdf-slide-html "azu/
 4. Push to the branch: `git push origin my-new-feature`
 5. Submit a pull request :D
 
-## License
+## Copyright
 
 This repository bundles multiple works (code and artwork) under different licenses. When redistributing the full project—including the Rabbit/Elephpant imagery—you must comply with the GNU General Public License version 2.0 or later for those assets in addition to the software licenses noted below.
 
+This fork does not assert additional copyright; all rights remain with the original authors of each component.
+
 ### azu/slide-pdf.js
 
-[azu/slide-pdf.js](https://github.com/azu/slide-pdf.js) is MIT licensed.
+[azu/slide-pdf.js](https://github.com/azu/slide-pdf.js) is MIT licensed. All files in this repository—except for the artwork noted below—inherit this license unless additional notices are provided.
 
 ```
 Copyright (c) 2014 azu

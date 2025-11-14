@@ -2,10 +2,10 @@
   "name": "slide-pdf.js",
   "description": "pdf slide on the web.",
   "version": "1.0.0",
-  "homepage": "https://github.com/azu/slide-pdf.js/",
+  "homepage": "https://github.com/zonuexe/slide-pdf.js/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/azu/slide-pdf.js.git"
+    "url": "https://github.com/zonuexe/slide-pdf.js.git"
   },
   "main": "index.js",
   "scripts": {
@@ -22,9 +22,20 @@
     "access": "public"
   },
   "author": "azu",
-  "license": "MIT",
+  "maintainers": [
+    {
+      "name": "zonuexe",
+      "email": "tadsan@zonu.me",
+      "url": "https://github.com/zonuexe"
+    }
+  ],
+  "contributors": [
+    { "name": "azu" },
+    { "name": "zonuexe" }
+  ],
+  "license": "GPL-2.0-or-later",
   "bugs": {
-    "url": "https://github.com/azu/slide-pdf.js/issues"
+    "url": "https://github.com/zonuexe/slide-pdf.js/issues"
   },
   "dependencies": {
     "@zonuexe/pdf.js-controller": "^1.3.0",
