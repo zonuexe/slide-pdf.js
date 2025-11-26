@@ -387,8 +387,8 @@
         }
       }
     };
+    // Listen once at the window level so navigation is forwarded a single time.
     window.addEventListener('keydown', handleKeydown);
-    document.addEventListener('keydown', handleKeydown);
 
     // PDF読み込み
     async function loadPDF(url) {
