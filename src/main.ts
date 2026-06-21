@@ -74,6 +74,53 @@ const rabbitTimerState: RabbitTimerState = {
   spriteType: DEFAULT_RABBIT_SPRITE
 };
 
+// ===== Attention tools (laser / pen / highlighter / spotlight / blank) =====
+type InkToolType = 'pen' | 'highlighter';
+type NormPoint = { x: number; y: number };
+type InkStroke = { tool: InkToolType; color: string; size: number; points: NormPoint[] };
+type LaserPoint = { x: number; y: number; t: number };
+type BlankMode = 'off' | 'black' | 'white';
+type AnnotationDrawMessage = {
+  tool?: 'laser' | 'pen' | 'highlighter' | 'spotlight';
+  phase?: 'start' | 'move' | 'end';
+  x?: number;
+  y?: number;
+  color?: string;
+  size?: number;
+};
+
+const DEFAULT_PEN_COLOR = '#ff2d55';
+const DEFAULT_PEN_SIZE = 0.005; // fraction of slide width
+const DEFAULT_HIGHLIGHTER_SIZE = 0.03;
+const LASER_TRAIL_MS = 650;
+const LASER_CORE_RATIO = 0.012; // fraction of slide width
+const SPOTLIGHT_RADIUS_RATIO = 0.18; // fraction of slide diagonal
+const SPOTLIGHT_DIM = 0.62;
+
+type AnnotationState = {
+  overlay: HTMLCanvasElement | null;
+  ctx: CanvasRenderingContext2D | null;
+  blankLayer: HTMLElement | null;
+  strokesByPage: Map<number, InkStroke[]>;
+  activeStroke: InkStroke | null;
+  laserTrail: LaserPoint[];
+  spotlight: NormPoint | null;
+  rafId: number | null;
+  blankMode: BlankMode;
+};
+
+const annotationState: AnnotationState = {
+  overlay: null,
+  ctx: null,
+  blankLayer: null,
+  strokesByPage: new Map(),
+  activeStroke: null,
+  laserTrail: [],
+  spotlight: null,
+  rafId: null,
+  blankMode: 'off'
+};
+
 
 let speakerWindowRef: Window | null = null;
 let speakerHandshakeToken: string | null = null;
@@ -141,6 +188,7 @@ async function initializeNavigation() {
   wireSwipeGestures();
   setupControlsVisibility();
   setupRabbitTimerControls();
+  setupAnnotationOverlay();
   // 初期表示時は常にSpeakerボタンを表示
   showSpeakerButton();
 }
@@ -442,6 +490,13 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
     minutes?: number;
     intervalSeconds?: number;
     sprite?: string;
+    tool?: 'laser' | 'pen' | 'highlighter' | 'spotlight';
+    phase?: 'start' | 'move' | 'end';
+    x?: number;
+    y?: number;
+    color?: string;
+    size?: number;
+    blankMode?: BlankMode;
   };
 
   if (data.type === 'speaker-ready') {
@@ -487,6 +542,15 @@ function handleSpeakerWindowMessage(event: MessageEvent) {
         sprite: data.sprite,
         initiatedBy: 'speaker'
       });
+      break;
+    case 'annotation-draw':
+      handleAnnotationDraw(data);
+      break;
+    case 'annotation-clear':
+      clearAnnotations();
+      break;
+    case 'annotation-blank':
+      setBlankMode(data.blankMode ?? 'off');
       break;
     default:
       break;
@@ -591,6 +655,8 @@ function wireResizeHandler() {
     throttle(() => {
       void controller.fitItSize();
       refreshRabbitTimerPositions();
+      syncOverlaySize();
+      renderOverlay();
       scheduleSpeakerViewUpdate();
     }, 100),
     { signal: eventSignal }
@@ -729,6 +795,9 @@ function postNavigationUpdate() {
   updateURL();
   updateSpeakerButtonVisibility();
   updateRabbitPageProgress();
+  resetTransientAnnotations();
+  syncOverlaySize();
+  renderOverlay();
   scheduleSpeakerViewUpdate();
   sendSpeakerPing('navigation-update');
 }
@@ -1053,5 +1122,266 @@ function notifySpeakerRabbitStatus(
     );
   } catch (error) {
     console.warn('Failed to share Rabbit timer status with speaker view', error);
+  }
+}
+
+function setupAnnotationOverlay(): void {
+  if (annotationState.overlay) {
+    return;
+  }
+  const overlay = document.createElement('canvas');
+  overlay.id = 'js-annotation-overlay';
+  overlay.style.position = 'absolute';
+  overlay.style.left = '0';
+  overlay.style.top = '0';
+  overlay.style.pointerEvents = 'none';
+  overlay.style.zIndex = '5';
+  container.appendChild(overlay);
+  annotationState.overlay = overlay;
+  annotationState.ctx = overlay.getContext('2d');
+
+  const blank = document.createElement('div');
+  blank.id = 'js-blank-screen';
+  blank.style.position = 'fixed';
+  blank.style.inset = '0';
+  blank.style.zIndex = '9999';
+  blank.style.display = 'none';
+  document.body.appendChild(blank);
+  annotationState.blankLayer = blank;
+
+  const afterEvent = PDFController.Events.after_pdf_rendering;
+  container.addEventListener(
+    afterEvent,
+    () => {
+      syncOverlaySize();
+      renderOverlay();
+    },
+    { signal: eventSignal }
+  );
+
+  syncOverlaySize();
+  renderOverlay();
+}
+
+function syncOverlaySize(): void {
+  const overlay = annotationState.overlay;
+  const base = controller.domMapObject?.canvas as HTMLCanvasElement | undefined;
+  if (!overlay || !base) {
+    return;
+  }
+  const baseRect = base.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const cssWidth = baseRect.width || base.clientWidth;
+  const cssHeight = baseRect.height || base.clientHeight;
+  if (cssWidth <= 0 || cssHeight <= 0) {
+    return;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  overlay.style.left = `${baseRect.left - containerRect.left}px`;
+  overlay.style.top = `${baseRect.top - containerRect.top}px`;
+  overlay.style.width = `${cssWidth}px`;
+  overlay.style.height = `${cssHeight}px`;
+  overlay.width = Math.max(1, Math.round(cssWidth * dpr));
+  overlay.height = Math.max(1, Math.round(cssHeight * dpr));
+}
+
+function ensureOverlayRaf(): void {
+  if (annotationState.rafId !== null) {
+    return;
+  }
+  annotationState.rafId = window.requestAnimationFrame(() => {
+    annotationState.rafId = null;
+    renderOverlay();
+    if (annotationState.laserTrail.length > 0) {
+      ensureOverlayRaf();
+    }
+  });
+}
+
+function renderOverlay(): void {
+  const ctx = annotationState.ctx;
+  const overlay = annotationState.overlay;
+  if (!ctx || !overlay) {
+    return;
+  }
+  const w = overlay.width;
+  const h = overlay.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const page = controller.pageNum ?? 1;
+  const strokes = annotationState.strokesByPage.get(page);
+  if (strokes) {
+    for (const stroke of strokes) {
+      drawInkStroke(ctx, stroke, w, h);
+    }
+  }
+  if (annotationState.activeStroke) {
+    drawInkStroke(ctx, annotationState.activeStroke, w, h);
+  }
+  if (annotationState.spotlight) {
+    drawSpotlight(ctx, annotationState.spotlight, w, h);
+  }
+  drawLaserTrail(ctx, w, h);
+}
+
+function drawInkStroke(ctx: CanvasRenderingContext2D, stroke: InkStroke, w: number, h: number): void {
+  const pts = stroke.points;
+  if (pts.length === 0) {
+    return;
+  }
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = stroke.color;
+  ctx.fillStyle = stroke.color;
+  const lineWidth = Math.max(stroke.size * w, 1);
+  ctx.lineWidth = lineWidth;
+  if (stroke.tool === 'highlighter') {
+    ctx.globalAlpha = 0.38;
+    ctx.globalCompositeOperation = 'multiply';
+  }
+  if (pts.length === 1) {
+    ctx.beginPath();
+    ctx.arc(pts[0].x * w, pts[0].y * h, lineWidth / 2, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    pts.forEach((p, index) => {
+      const x = p.x * w;
+      const y = p.y * h;
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSpotlight(ctx: CanvasRenderingContext2D, point: NormPoint, w: number, h: number): void {
+  const radius = SPOTLIGHT_RADIUS_RATIO * Math.hypot(w, h);
+  const cx = point.x * w;
+  const cy = point.y * h;
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${SPOTLIGHT_DIM})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'destination-out';
+  const gradient = ctx.createRadialGradient(cx, cy, radius * 0.55, cx, cy, radius);
+  gradient.addColorStop(0, 'rgba(0,0,0,1)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLaserTrail(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const now = Date.now();
+  annotationState.laserTrail = annotationState.laserTrail.filter((p) => now - p.t < LASER_TRAIL_MS);
+  const trail = annotationState.laserTrail;
+  if (trail.length === 0) {
+    return;
+  }
+  const core = Math.max(LASER_CORE_RATIO * w, 3);
+  ctx.save();
+  for (const p of trail) {
+    const age = (now - p.t) / LASER_TRAIL_MS;
+    const alpha = Math.max(0, 1 - age);
+    const x = p.x * w;
+    const y = p.y * h;
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, core * 2.4);
+    glow.addColorStop(0, `rgba(255,60,60,${0.55 * alpha})`);
+    glow.addColorStop(1, 'rgba(255,60,60,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, core * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const last = trail[trail.length - 1];
+  ctx.fillStyle = 'rgba(255,235,235,0.95)';
+  ctx.beginPath();
+  ctx.arc(last.x * w, last.y * h, core * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function handleAnnotationDraw(data: AnnotationDrawMessage): void {
+  const tool = data.tool;
+  const x = typeof data.x === 'number' ? data.x : 0;
+  const y = typeof data.y === 'number' ? data.y : 0;
+
+  if (tool === 'laser') {
+    annotationState.laserTrail.push({ x, y, t: Date.now() });
+    renderOverlay();
+    ensureOverlayRaf();
+    return;
+  }
+
+  if (tool === 'spotlight') {
+    annotationState.spotlight = data.phase === 'end' ? null : { x, y };
+    renderOverlay();
+    return;
+  }
+
+  if (tool === 'pen' || tool === 'highlighter') {
+    if (data.phase === 'start') {
+      annotationState.activeStroke = {
+        tool,
+        color: data.color || DEFAULT_PEN_COLOR,
+        size:
+          typeof data.size === 'number'
+            ? data.size
+            : tool === 'highlighter'
+              ? DEFAULT_HIGHLIGHTER_SIZE
+              : DEFAULT_PEN_SIZE,
+        points: [{ x, y }]
+      };
+    } else if (data.phase === 'move') {
+      annotationState.activeStroke?.points.push({ x, y });
+    } else if (data.phase === 'end') {
+      const stroke = annotationState.activeStroke;
+      if (stroke && stroke.points.length > 0) {
+        const page = controller.pageNum ?? 1;
+        const list = annotationState.strokesByPage.get(page) ?? [];
+        list.push(stroke);
+        annotationState.strokesByPage.set(page, list);
+      }
+      annotationState.activeStroke = null;
+    }
+    renderOverlay();
+  }
+}
+
+function clearAnnotations(): void {
+  const page = controller.pageNum ?? 1;
+  annotationState.strokesByPage.delete(page);
+  annotationState.activeStroke = null;
+  annotationState.laserTrail = [];
+  annotationState.spotlight = null;
+  renderOverlay();
+}
+
+function resetTransientAnnotations(): void {
+  annotationState.activeStroke = null;
+  annotationState.laserTrail = [];
+  annotationState.spotlight = null;
+}
+
+function setBlankMode(mode: BlankMode): void {
+  const layer = annotationState.blankLayer;
+  if (!layer) {
+    return;
+  }
+  const normalized: BlankMode = mode === 'black' || mode === 'white' ? mode : 'off';
+  annotationState.blankMode = normalized;
+  if (normalized === 'off') {
+    layer.style.display = 'none';
+    layer.style.background = '';
+  } else {
+    layer.style.display = 'block';
+    layer.style.background = normalized === 'black' ? '#000' : '#fff';
   }
 }

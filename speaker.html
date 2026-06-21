@@ -132,6 +132,82 @@
       color: #d1d5db;
       min-height: 1.2rem;
     }
+    .speaker-tools {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+    }
+    .speaker-tools-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .speaker-tools-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #c0c0c0;
+      margin-inline-end: 0.25rem;
+    }
+    .tool-btn {
+      padding: 0.35rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      cursor: pointer;
+      background: rgba(0, 0, 0, 0.3);
+      color: #f5f5f5;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .tool-btn:hover,
+    .tool-btn:focus-visible {
+      border-color: #7dd3fc;
+      outline: none;
+    }
+    .tool-btn.is-active {
+      background: #7dd3fc;
+      color: #05121a;
+      border-color: #7dd3fc;
+    }
+    .tool-btn.is-blank {
+      background: #f5f5f5;
+      color: #111;
+      border-color: #f5f5f5;
+    }
+    .tool-color {
+      width: 2.2rem;
+      height: 2.2rem;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 0.4rem;
+      background: transparent;
+      cursor: pointer;
+    }
+    .tool-width-label {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      color: #c0c0c0;
+    }
+    .speaker-tools-hint {
+      font-size: 0.78rem;
+      color: #9aa0a6;
+    }
+    .speaker-current-overlay {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+    .preview-tile.is-tool-active .preview-canvas {
+      cursor: crosshair;
+    }
     .speaker-channel-indicator {
       font-size: 0.8rem;
       text-align: center;
@@ -148,9 +224,9 @@
 <body class="speaker-view">
   <div class="speaker-layout" id="js-speaker-root">
     <div class="preview-row">
-      <div class="preview-tile">
+      <div class="preview-tile" id="js-speaker-current-tile">
         <div class="preview-title" id="js-speaker-current-label">現在: -</div>
-        <div class="preview-frame">
+        <div class="preview-frame" id="js-speaker-current-frame">
           <canvas class="preview-canvas" id="js-speaker-current-canvas"></canvas>
         </div>
       </div>
@@ -194,6 +270,23 @@
         <button id="js-speaker-rabbit-start" class="speaker-rabbit-button" type="button">Start Rabbit</button>
       </div>
       <div id="js-speaker-rabbit-status" class="speaker-rabbit-status" aria-live="polite">Timer idle.</div>
+    </div>
+    <div class="speaker-tools" id="js-speaker-tools">
+      <div class="speaker-tools-row">
+        <span class="speaker-tools-label">注目ツール</span>
+        <button type="button" class="tool-btn is-active" data-tool="off">Off (O)</button>
+        <button type="button" class="tool-btn" data-tool="laser">Laser (L)</button>
+        <button type="button" class="tool-btn" data-tool="pen">Pen (P)</button>
+        <button type="button" class="tool-btn" data-tool="highlighter">Marker (H)</button>
+        <button type="button" class="tool-btn" data-tool="spotlight">Spotlight (T)</button>
+        <input type="color" id="js-tool-color" class="tool-color" value="#ff2d55" title="ペン/マーカーの色" />
+        <label class="tool-width-label">太さ
+          <input type="range" id="js-tool-width" min="1" max="20" step="1" value="4" />
+        </label>
+        <button type="button" class="tool-btn" id="js-tool-clear">消去 (C)</button>
+        <button type="button" class="tool-btn" id="js-tool-blank">Blank (B)</button>
+      </div>
+      <div class="speaker-tools-hint">「現在」プレビュー上でドラッグして描画／レーザー・スポットライトはポインタ移動で追従。</div>
     </div>
     <div class="speaker-channel-indicator" id="js-speaker-channel">channel: connecting…</div>
   </div>
@@ -389,6 +482,408 @@
     };
     // Listen once at the window level so navigation is forwarded a single time.
     window.addEventListener('keydown', handleKeydown);
+
+    // ===== Attention tools (laser / pen / highlighter / spotlight / blank) =====
+    const toolButtons = Array.from(document.querySelectorAll('.tool-btn[data-tool]'));
+    const toolColor = document.getElementById('js-tool-color');
+    const toolWidth = document.getElementById('js-tool-width');
+    const toolClearBtn = document.getElementById('js-tool-clear');
+    const toolBlankBtn = document.getElementById('js-tool-blank');
+    const currentTile = document.getElementById('js-speaker-current-tile');
+    const currentFrame = document.getElementById('js-speaker-current-frame');
+
+    const TOOL_LASER_TRAIL_MS = 650;
+    const TOOL_LASER_CORE_RATIO = 0.012;
+    const TOOL_SPOTLIGHT_RADIUS_RATIO = 0.18;
+    const TOOL_SPOTLIGHT_DIM = 0.62;
+
+    const toolState = { tool: 'off', blankMode: 'off' };
+    const echo = {
+      strokesByPage: new Map(),
+      activeStroke: null,
+      laserTrail: [],
+      spotlight: null,
+      rafId: null,
+      page: 1
+    };
+
+    const toolOverlay = document.createElement('canvas');
+    toolOverlay.className = 'speaker-current-overlay';
+    const toolCtx = toolOverlay.getContext('2d');
+    if (currentFrame) {
+      currentFrame.appendChild(toolOverlay);
+    }
+
+    const clampUnit = (value) => Math.min(1, Math.max(0, value));
+    const penWidthFraction = () => (Number(toolWidth?.value) || 4) / 1000;
+    const strokeSizeFor = (tool) => (tool === 'highlighter' ? penWidthFraction() * 5 : penWidthFraction());
+    const penColor = () => (toolColor instanceof HTMLInputElement ? toolColor.value : '#ff2d55');
+
+    function syncToolOverlay() {
+      if (!currentCanvas || !toolOverlay || !currentFrame) {
+        return;
+      }
+      const cssWidth = currentCanvas.style.width;
+      const cssHeight = currentCanvas.style.height;
+      if (!cssWidth || !cssHeight) {
+        return;
+      }
+      const frameRect = currentFrame.getBoundingClientRect();
+      const canvasRect = currentCanvas.getBoundingClientRect();
+      toolOverlay.style.left = `${canvasRect.left - frameRect.left}px`;
+      toolOverlay.style.top = `${canvasRect.top - frameRect.top}px`;
+      toolOverlay.style.width = cssWidth;
+      toolOverlay.style.height = cssHeight;
+      toolOverlay.width = currentCanvas.width;
+      toolOverlay.height = currentCanvas.height;
+      renderEcho();
+    }
+
+    function drawEchoInk(stroke, w, h) {
+      const pts = stroke.points;
+      if (!pts.length) {
+        return;
+      }
+      toolCtx.save();
+      toolCtx.lineJoin = 'round';
+      toolCtx.lineCap = 'round';
+      toolCtx.strokeStyle = stroke.color;
+      toolCtx.fillStyle = stroke.color;
+      const lineWidth = Math.max(stroke.size * w, 1);
+      toolCtx.lineWidth = lineWidth;
+      if (stroke.tool === 'highlighter') {
+        toolCtx.globalAlpha = 0.38;
+        toolCtx.globalCompositeOperation = 'multiply';
+      }
+      if (pts.length === 1) {
+        toolCtx.beginPath();
+        toolCtx.arc(pts[0].x * w, pts[0].y * h, lineWidth / 2, 0, Math.PI * 2);
+        toolCtx.fill();
+      } else {
+        toolCtx.beginPath();
+        pts.forEach((p, index) => {
+          const x = p.x * w;
+          const y = p.y * h;
+          if (index === 0) {
+            toolCtx.moveTo(x, y);
+          } else {
+            toolCtx.lineTo(x, y);
+          }
+        });
+        toolCtx.stroke();
+      }
+      toolCtx.restore();
+    }
+
+    function drawEchoSpotlight(point, w, h) {
+      const radius = TOOL_SPOTLIGHT_RADIUS_RATIO * Math.hypot(w, h);
+      const cx = point.x * w;
+      const cy = point.y * h;
+      toolCtx.save();
+      toolCtx.fillStyle = `rgba(0,0,0,${TOOL_SPOTLIGHT_DIM})`;
+      toolCtx.fillRect(0, 0, w, h);
+      toolCtx.globalCompositeOperation = 'destination-out';
+      const gradient = toolCtx.createRadialGradient(cx, cy, radius * 0.55, cx, cy, radius);
+      gradient.addColorStop(0, 'rgba(0,0,0,1)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      toolCtx.fillStyle = gradient;
+      toolCtx.beginPath();
+      toolCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+      toolCtx.fill();
+      toolCtx.restore();
+    }
+
+    function drawEchoLaser(w, h) {
+      const now = Date.now();
+      echo.laserTrail = echo.laserTrail.filter((p) => now - p.t < TOOL_LASER_TRAIL_MS);
+      const trail = echo.laserTrail;
+      if (!trail.length) {
+        return;
+      }
+      const core = Math.max(TOOL_LASER_CORE_RATIO * w, 3);
+      toolCtx.save();
+      for (const p of trail) {
+        const age = (now - p.t) / TOOL_LASER_TRAIL_MS;
+        const alpha = Math.max(0, 1 - age);
+        const x = p.x * w;
+        const y = p.y * h;
+        const glow = toolCtx.createRadialGradient(x, y, 0, x, y, core * 2.4);
+        glow.addColorStop(0, `rgba(255,60,60,${0.55 * alpha})`);
+        glow.addColorStop(1, 'rgba(255,60,60,0)');
+        toolCtx.fillStyle = glow;
+        toolCtx.beginPath();
+        toolCtx.arc(x, y, core * 2.4, 0, Math.PI * 2);
+        toolCtx.fill();
+      }
+      const last = trail[trail.length - 1];
+      toolCtx.fillStyle = 'rgba(255,235,235,0.95)';
+      toolCtx.beginPath();
+      toolCtx.arc(last.x * w, last.y * h, core * 0.5, 0, Math.PI * 2);
+      toolCtx.fill();
+      toolCtx.restore();
+    }
+
+    function renderEcho() {
+      if (!toolCtx || !toolOverlay) {
+        return;
+      }
+      const w = toolOverlay.width;
+      const h = toolOverlay.height;
+      toolCtx.clearRect(0, 0, w, h);
+      const strokes = echo.strokesByPage.get(echo.page);
+      if (strokes) {
+        strokes.forEach((stroke) => drawEchoInk(stroke, w, h));
+      }
+      if (echo.activeStroke) {
+        drawEchoInk(echo.activeStroke, w, h);
+      }
+      if (echo.spotlight) {
+        drawEchoSpotlight(echo.spotlight, w, h);
+      }
+      drawEchoLaser(w, h);
+    }
+
+    function ensureEchoRaf() {
+      if (echo.rafId !== null) {
+        return;
+      }
+      echo.rafId = requestAnimationFrame(() => {
+        echo.rafId = null;
+        renderEcho();
+        if (echo.laserTrail.length > 0) {
+          ensureEchoRaf();
+        }
+      });
+    }
+
+    function sendAnnotation(tool, phase, point) {
+      if (!window.opener || window.opener.closed) {
+        return;
+      }
+      const size = tool === 'pen' || tool === 'highlighter' ? strokeSizeFor(tool) : undefined;
+      try {
+        window.opener.postMessage(
+          {
+            type: 'annotation-draw',
+            handshake,
+            tool,
+            phase,
+            x: point.x,
+            y: point.y,
+            color: penColor(),
+            size
+          },
+          window.location.origin
+        );
+      } catch (error) {
+        console.error('Failed to send annotation', error);
+      }
+    }
+
+    function toNorm(event) {
+      const rect = currentCanvas.getBoundingClientRect();
+      return {
+        x: clampUnit((event.clientX - rect.left) / (rect.width || 1)),
+        y: clampUnit((event.clientY - rect.top) / (rect.height || 1))
+      };
+    }
+
+    let drawing = false;
+
+    function endStroke(point) {
+      if ((toolState.tool === 'pen' || toolState.tool === 'highlighter') && drawing) {
+        drawing = false;
+        if (echo.activeStroke) {
+          const list = echo.strokesByPage.get(echo.page) || [];
+          list.push(echo.activeStroke);
+          echo.strokesByPage.set(echo.page, list);
+          echo.activeStroke = null;
+        }
+        renderEcho();
+        sendAnnotation(toolState.tool, 'end', point || { x: 0, y: 0 });
+      }
+    }
+
+    if (currentCanvas) {
+      currentCanvas.addEventListener('pointerdown', (event) => {
+        if (toolState.tool === 'off') {
+          return;
+        }
+        event.preventDefault();
+        try {
+          currentCanvas.setPointerCapture(event.pointerId);
+        } catch {
+          /* ignore */
+        }
+        const p = toNorm(event);
+        if (toolState.tool === 'laser') {
+          echo.laserTrail.push({ x: p.x, y: p.y, t: Date.now() });
+          renderEcho();
+          ensureEchoRaf();
+          sendAnnotation('laser', 'move', p);
+        } else if (toolState.tool === 'spotlight') {
+          echo.spotlight = p;
+          renderEcho();
+          sendAnnotation('spotlight', 'move', p);
+        } else {
+          drawing = true;
+          echo.activeStroke = {
+            tool: toolState.tool,
+            color: penColor(),
+            size: strokeSizeFor(toolState.tool),
+            points: [p]
+          };
+          renderEcho();
+          sendAnnotation(toolState.tool, 'start', p);
+        }
+      });
+
+      currentCanvas.addEventListener('pointermove', (event) => {
+        if (toolState.tool === 'off') {
+          return;
+        }
+        const p = toNorm(event);
+        if (toolState.tool === 'laser') {
+          echo.laserTrail.push({ x: p.x, y: p.y, t: Date.now() });
+          renderEcho();
+          ensureEchoRaf();
+          sendAnnotation('laser', 'move', p);
+        } else if (toolState.tool === 'spotlight') {
+          echo.spotlight = p;
+          renderEcho();
+          sendAnnotation('spotlight', 'move', p);
+        } else if (drawing && echo.activeStroke) {
+          echo.activeStroke.points.push(p);
+          renderEcho();
+          sendAnnotation(toolState.tool, 'move', p);
+        }
+      });
+
+      currentCanvas.addEventListener('pointerup', (event) => endStroke(toNorm(event)));
+      currentCanvas.addEventListener('pointercancel', () => endStroke());
+      currentCanvas.addEventListener('pointerleave', () => {
+        if (toolState.tool === 'spotlight') {
+          echo.spotlight = null;
+          renderEcho();
+          sendAnnotation('spotlight', 'end', { x: 0, y: 0 });
+        }
+        endStroke();
+      });
+    }
+
+    function setTool(tool) {
+      toolState.tool = tool;
+      toolButtons.forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.tool === tool);
+      });
+      if (currentTile) {
+        currentTile.classList.toggle('is-tool-active', tool !== 'off');
+      }
+      if (tool !== 'spotlight' && echo.spotlight) {
+        echo.spotlight = null;
+        renderEcho();
+        sendAnnotation('spotlight', 'end', { x: 0, y: 0 });
+      }
+    }
+
+    toolButtons.forEach((button) => {
+      button.addEventListener('click', () => setTool(button.dataset.tool));
+    });
+
+    function clearAnnotations() {
+      echo.strokesByPage.delete(echo.page);
+      echo.activeStroke = null;
+      echo.laserTrail = [];
+      echo.spotlight = null;
+      renderEcho();
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'annotation-clear', handshake }, window.location.origin);
+        } catch (error) {
+          console.error('Failed to send annotation clear', error);
+        }
+      }
+    }
+
+    if (toolClearBtn) {
+      toolClearBtn.addEventListener('click', clearAnnotations);
+    }
+
+    function setBlank(mode) {
+      toolState.blankMode = mode;
+      if (toolBlankBtn) {
+        toolBlankBtn.classList.toggle('is-active', mode === 'black');
+        toolBlankBtn.classList.toggle('is-blank', mode === 'white');
+        toolBlankBtn.textContent =
+          mode === 'off' ? 'Blank (B)' : mode === 'black' ? 'Blank: 黒 (B)' : 'Blank: 白 (B)';
+      }
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'annotation-blank', handshake, blankMode: mode }, window.location.origin);
+        } catch (error) {
+          console.error('Failed to send blank state', error);
+        }
+      }
+    }
+
+    function cycleBlank() {
+      const order = { off: 'black', black: 'white', white: 'off' };
+      setBlank(order[toolState.blankMode] || 'black');
+    }
+
+    if (toolBlankBtn) {
+      toolBlankBtn.addEventListener('click', cycleBlank);
+    }
+
+    window.addEventListener('keydown', (event) => {
+      const target = event.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      const toolKeys = { o: 'off', l: 'laser', p: 'pen', h: 'highlighter', t: 'spotlight' };
+      if (toolKeys[key]) {
+        setTool(toolKeys[key]);
+      } else if (key === 'c') {
+        clearAnnotations();
+      } else if (key === 'b') {
+        cycleBlank();
+      } else {
+        return;
+      }
+      event.preventDefault();
+    });
+
+    // Re-sync overlay whenever the preview canvas changes size (render / resize).
+    if ('ResizeObserver' in window && currentCanvas) {
+      const overlayResizeObserver = new ResizeObserver(() => syncToolOverlay());
+      overlayResizeObserver.observe(currentCanvas);
+    }
+
+    // Track page changes for the local echo layer.
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+      const data = event.data;
+      if (!data || typeof data !== 'object') {
+        return;
+      }
+      if (data.type === 'speaker-navigation-update' && data.handshake === handshake) {
+        const newPage = data.currentPage ?? 1;
+        if (newPage !== echo.page) {
+          echo.page = newPage;
+          echo.activeStroke = null;
+          echo.laserTrail = [];
+          echo.spotlight = null;
+        }
+        syncToolOverlay();
+        renderEcho();
+      }
+    });
 
     // PDF読み込み
     async function loadPDF(url) {
