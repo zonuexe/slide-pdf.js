@@ -93,7 +93,7 @@ const DEFAULT_PEN_COLOR = '#ff2d55';
 const DEFAULT_PEN_SIZE = 0.005; // fraction of slide width
 const DEFAULT_HIGHLIGHTER_SIZE = 0.03;
 const LASER_TRAIL_MS = 650;
-const LASER_CORE_RATIO = 0.012; // fraction of slide width
+const LASER_CORE_RATIO = 0.005; // fraction of slide width
 const SPOTLIGHT_RADIUS_RATIO = 0.18; // fraction of slide diagonal
 const SPOTLIGHT_DIM = 0.62;
 
@@ -1285,25 +1285,36 @@ function drawLaserTrail(ctx: CanvasRenderingContext2D, w: number, h: number): vo
   if (trail.length === 0) {
     return;
   }
-  const core = Math.max(LASER_CORE_RATIO * w, 3);
+  const core = Math.max(LASER_CORE_RATIO * w, 2);
   ctx.save();
+  // sharp, saturated fading dots for the trail
   for (const p of trail) {
     const age = (now - p.t) / LASER_TRAIL_MS;
     const alpha = Math.max(0, 1 - age);
-    const x = p.x * w;
-    const y = p.y * h;
-    const glow = ctx.createRadialGradient(x, y, 0, x, y, core * 2.4);
-    glow.addColorStop(0, `rgba(255,60,60,${0.55 * alpha})`);
-    glow.addColorStop(1, 'rgba(255,60,60,0)');
-    ctx.fillStyle = glow;
+    const radius = core * (0.4 + 0.5 * (1 - age));
+    ctx.fillStyle = `rgba(210,10,10,${0.9 * alpha})`;
     ctx.beginPath();
-    ctx.arc(x, y, core * 2.4, 0, Math.PI * 2);
+    ctx.arc(p.x * w, p.y * h, radius, 0, Math.PI * 2);
     ctx.fill();
   }
+  // head: tight glow + solid saturated core + hot center
   const last = trail[trail.length - 1];
-  ctx.fillStyle = 'rgba(255,235,235,0.95)';
+  const lx = last.x * w;
+  const ly = last.y * h;
+  const glow = ctx.createRadialGradient(lx, ly, core * 0.7, lx, ly, core * 1.7);
+  glow.addColorStop(0, 'rgba(255,0,0,0.45)');
+  glow.addColorStop(1, 'rgba(255,0,0,0)');
+  ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(last.x * w, last.y * h, core * 0.5, 0, Math.PI * 2);
+  ctx.arc(lx, ly, core * 1.7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(205,0,0,1)';
+  ctx.beginPath();
+  ctx.arc(lx, ly, core, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,170,170,0.95)';
+  ctx.beginPath();
+  ctx.arc(lx, ly, core * 0.4, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
